@@ -57,16 +57,13 @@ print(f"My name is {name} and I am {age} years old.")  # 使用 f-string 格式�
 # int(x): 轉成整數
 print(int(3.7))  # 3
 print(int("8"))  # 8
-
 # float(x): 轉成浮點數
 print(float(5))  # 5.0
 print(float("2.3"))  # 2.3
-
 # str(x): 轉成字串
 print(str(123))  # "123"
 print(str(4.56))  # "4.56"
 print(str(True))  # "True"
-
 # bool(x): 轉成布林值
 print(bool(0))  # False
 print(bool(1))  # True
@@ -76,9 +73,17 @@ print(bool("abc"))  # True
 # len 格式
 s = "hello"
 print(len(s))  # 輸出字串長度，結果為 5
-
 # type 格式
 print(type(s))  # 輸出變數 s 的型態，結果為 <class 'str'>
 print(type(123))  # 輸出整數的型態，結果為 <class 'int'>
 print(type(3.14))  # 輸出浮點數的型態，結果為 <class 'float'>
 print(type(True))  # 輸出布林值的型態，結果為 <class 'bool'>
+
+print("輸入開始")
+a = input("請輸入一個數字: ")  # 使用 input() 函數讀取使用者輸入
+print("輸入結束")
+print(int(a) + 10)  # 將輸入的字串轉換為整數並加上 10
+# 注意：input() 函數讀取的輸入是字串類型，需要使用 int() 函數將其轉換為整數才能進行數學運算
+print(
+    type(a)
+)  # 輸出輸入的型態，結果為 <class 'str'>，因為 input() 函數返回的是字串類型
