@@ -1,5 +1,4 @@
 # LIST
-
 print([])  # 這是空的list
 print([1, 2, 3])  # 這是包含三個整數的list
 print(["a", "b", "c"])  # 這是包含三個字串的list
