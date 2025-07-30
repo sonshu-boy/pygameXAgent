@@ -373,6 +373,55 @@ class LevelGenerator:
 
         return platforms, enemies, cheeses
 
+    @staticmethod
+    def create_safe_transition_platform(section_start_y):
+        """在每個區域開始處創建安全過渡平台"""
+        platforms = []
+        cheeses = []
+
+        # 大型安全平台 - 橫跨大部分螢幕寬度
+        main_platform_width = 600
+        main_platform_x = (WINDOW_WIDTH - main_platform_width) // 2
+        platforms.append(
+            Platform(
+                main_platform_x, section_start_y - 50, main_platform_width, 40, GREEN
+            )
+        )
+
+        # 裝飾性邊框平台，突出安全區域
+        border_width = 20
+        platforms.extend(
+            [
+                Platform(
+                    main_platform_x - border_width,
+                    section_start_y - 55,
+                    border_width,
+                    10,
+                    GREEN,
+                ),  # 左邊框
+                Platform(
+                    main_platform_x + main_platform_width,
+                    section_start_y - 55,
+                    border_width,
+                    10,
+                    GREEN,
+                ),  # 右邊框
+                Platform(
+                    main_platform_x, section_start_y - 60, main_platform_width, 5, GREEN
+                ),  # 頂部邊框
+            ]
+        )
+
+        # 在安全平台上放置治療起司
+        cheese_spacing = 80
+        cheese_start_x = main_platform_x + 50
+        for i in range(6):  # 6個治療起司
+            cheese_x = cheese_start_x + i * cheese_spacing
+            if cheese_x < main_platform_x + main_platform_width - 50:
+                cheeses.append(Cheese(cheese_x, section_start_y - 80))
+
+        return platforms, cheeses
+
     @classmethod
     def generate_complete_tower(cls):
         """生成完整的塔樓"""
@@ -391,6 +440,16 @@ class LevelGenerator:
 
         for i, section_func in enumerate(sections):
             base_y = i * SECTION_HEIGHT
+
+            # 在每個區域開始前添加安全平台（除了第一個區域）
+            if i > 0:  # 不在第一個區域添加，因為已經有安全起始平台
+                safe_platforms, safe_cheeses = cls.create_safe_transition_platform(
+                    base_y
+                )
+                all_platforms.extend(safe_platforms)
+                all_cheeses.extend(safe_cheeses)
+
+            # 生成該區域的內容
             platforms, enemies, cheeses = section_func(base_y)
             all_platforms.extend(platforms)
             all_enemies.extend(enemies)

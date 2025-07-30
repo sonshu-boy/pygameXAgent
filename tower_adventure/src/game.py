@@ -29,12 +29,16 @@ class Game:
         self.game_state = "playing"  # playing, game_over, victory, upgrade
         self.upgrade_options = []
         self.ui = GameUI()
+        self.safe_platform_heal_timer = 0  # 安全平台治療計時器
 
     def update(self):
         """更新遊戲狀態"""
         if self.game_state == "playing":
             # 更新玩家
             self.player.update(self.platforms, self.enemies)
+
+            # 檢查玩家是否在安全平台上並提供治療
+            self.check_safe_platform_healing()
 
             # 更新敵人
             for enemy in self.enemies:
@@ -70,6 +74,34 @@ class Game:
                 if current_progress > self.last_progress:
                     self.last_progress = current_progress
                     self.show_progress_reward()
+
+    def check_safe_platform_healing(self):
+        """檢查玩家是否在安全平台上並提供治療"""
+        player_rect = self.player.get_rect()
+        is_on_safe_platform = False
+
+        # 檢查是否站在綠色（安全）平台上
+        for platform in self.platforms:
+            if (
+                platform.color == GREEN
+                and player_rect.colliderect(platform.rect)
+                and self.player.vel_y >= 0
+                and player_rect.bottom <= platform.rect.top + 10
+            ):
+                is_on_safe_platform = True
+                break
+
+        if is_on_safe_platform:
+            self.safe_platform_heal_timer += 1
+            # 每2秒（120幀）恢復5點生命值
+            if self.safe_platform_heal_timer >= 120:
+                if self.player.health < self.player.max_health:
+                    self.player.health = min(
+                        self.player.health + 5, self.player.max_health
+                    )
+                self.safe_platform_heal_timer = 0
+        else:
+            self.safe_platform_heal_timer = 0
 
     def show_progress_reward(self):
         """顯示進度獎勵選單"""
@@ -109,6 +141,7 @@ class Game:
         self.camera_y = 0
         self.game_state = "playing"
         self.last_progress = 0
+        self.safe_platform_heal_timer = 0
 
     def draw(self, surface):
         """繪製遊戲"""
@@ -143,6 +176,9 @@ class Game:
         self.ui.draw_game_stats(surface, self.player, bar_x, bar_y, bar_height)
         self.ui.draw_controls(surface)
 
+        # 安全平台提示
+        self.draw_safe_platform_status(surface)
+
         # 遊戲狀態相關UI
         if self.game_state == "game_over":
             self.ui.draw_game_over(surface)
@@ -150,3 +186,66 @@ class Game:
             self.ui.draw_victory(surface, self.player.cheese_count)
         elif self.game_state == "upgrade":
             self.ui.draw_upgrade_menu(surface, self.player, self.upgrade_options)
+
+    def draw_safe_platform_status(self, surface):
+        """繪製安全平台狀態提示"""
+        player_rect = self.player.get_rect()
+        is_on_safe_platform = False
+
+        # 檢查是否站在綠色（安全）平台上
+        for platform in self.platforms:
+            if (
+                platform.color == GREEN
+                and player_rect.colliderect(platform.rect)
+                and self.player.vel_y >= 0
+                and player_rect.bottom <= platform.rect.top + 10
+            ):
+                is_on_safe_platform = True
+                break
+
+        if is_on_safe_platform:
+            # 顯示安全平台提示
+            safe_text = "安全區域 - 正在治療中..."
+            text_surface = self.ui.fonts.font_medium.render(safe_text, True, GREEN)
+            text_rect = text_surface.get_rect()
+            text_rect.centerx = WINDOW_WIDTH // 2
+            text_rect.y = 100
+
+            # 背景框
+            bg_rect = text_rect.copy()
+            bg_rect.inflate(20, 10)
+            pygame.draw.rect(surface, BLACK, bg_rect)
+            pygame.draw.rect(surface, GREEN, bg_rect, 2)
+
+            surface.blit(text_surface, text_rect)
+
+            # 治療進度條
+            if self.safe_platform_heal_timer > 0:
+                progress_width = 200
+                progress_height = 8
+                progress_x = (WINDOW_WIDTH - progress_width) // 2
+                progress_y = text_rect.bottom + 10
+
+                # 進度條背景
+                pygame.draw.rect(
+                    surface,
+                    DARK_GRAY,
+                    (progress_x, progress_y, progress_width, progress_height),
+                )
+
+                # 進度條
+                progress = min(self.safe_platform_heal_timer / 120, 1.0)
+                filled_width = int(progress_width * progress)
+                pygame.draw.rect(
+                    surface,
+                    GREEN,
+                    (progress_x, progress_y, filled_width, progress_height),
+                )
+
+                # 進度條邊框
+                pygame.draw.rect(
+                    surface,
+                    WHITE,
+                    (progress_x, progress_y, progress_width, progress_height),
+                    1,
+                )
