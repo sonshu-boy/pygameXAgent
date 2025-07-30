@@ -1,0 +1,6 @@
+@echo off
+echo 正在啟動起司小子的塔樓冒險...
+echo Starting Tower Adventure...
+cd /d "%~dp0"
+python main.py
+pause

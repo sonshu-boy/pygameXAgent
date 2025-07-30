@@ -1,0 +1,132 @@
+# Python 編譯檔案
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.so
+
+# Python 虛擬環境
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Python 套件安裝
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# pytest 快取
+.pytest_cache/
+.cache
+
+# Coverage 報告
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# IDE 和編輯器設定檔
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# macOS 系統檔案
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows 系統檔案
+Desktop.ini
+*.lnk
+
+# 日誌檔案
+*.log
+logs/
+
+# 暫存檔案和備份
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+# 環境變數檔案
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# pygame 特定檔案
+# 遊戲存檔 (如果有的話)
+saves/
+*.save
+*.dat
+
+# 遊戲設定檔案 (如果包含敏感資訊)
+config.ini
+settings.ini
+
+# 遊戲資源暫存檔案
+*.bmp.bak
+*.wav.bak
+*.mp3.bak
+
+# 開發和測試檔案
+test_output/
+debug/
+*.debug
+
+# 文件生成檔案
+docs/_build/
+
+# 專案特定忽略檔案
+# 如果有大型資源檔案，可以考慮忽略
+# assets/large_files/
+# assets/*.mp4
+# assets/*.avi
+
+# 部署相關檔案
+.deploy/
+deploy.sh
+*.zip
+*.tar.gz
+
+# 密鑰和憑證
+*.key
+*.pem
+*.crt
+secrets.json
