@@ -2,15 +2,16 @@
 
 ## Project Overview
 
-This is a 2D platform game built with pygame featuring a mouse character ("起司小子") descending from a tower top to ground level. The game uses a continuous vertical level system with 5 distinct sections, each offering different challenges and upgrade opportunities.
+This is a **pure 2D platformer game** built with pygame featuring a mouse character ("起司小子") descending from a tower top to ground level. The game uses a continuous vertical level system with 5 distinct sections focused on **platforming challenges only** - **all enemies and cheese have been removed** from the level generator, making this a pacifist exploration experience.
 
 ## Architecture & Key Patterns
 
 ### Core Game Loop Structure
 
-- **Event-driven input**: Main loop in `main.py` handles discrete events (jumps, slides) vs continuous input (movement, charge attacks)
+- **Event-driven input**: Main loop in `main.py` handles discrete events (jumps, slides) vs continuous input (movement)
 - **Camera system**: Smooth following camera with 0.1 interpolation factor in `game.py`
 - **State management**: Four game states: `playing`, `game_over`, `victory`, `upgrade`
+- **Pure platformer**: No combat or collection mechanics - focus on movement and exploration
 
 ### Module Organization
 
@@ -18,9 +19,9 @@ This is a 2D platform game built with pygame featuring a mouse character ("起�
 config/settings.py    # All constants, colors (RGB tuples), physics values
 src/game.py          # Main game logic, camera, state transitions
 src/player.py        # Complex player mechanics (coyote time, multi-jump, charge attacks)
-src/game_objects.py  # Platform, Enemy, Cheese classes with collision detection
+src/game_objects.py  # Platform, Enemy, Cheese classes (enemies/cheese unused)
 src/ui.py           # UI rendering with Chinese font fallback system
-levels/level_generator.py  # Procedural 5-section tower generation
+levels/level_generator.py  # Procedural 5-section tower generation (platforms only)
 ```
 
 ### Critical Physics & Game Systems
@@ -44,8 +45,9 @@ if self.vel_y > 0 and self.y < platform.rect.top - 5:
 #### Level Generation System
 
 - **Continuous tower**: Each section is `SECTION_HEIGHT` (1200px) tall
-- **Safe spawn area**: Section 1 has enemy-free starting platform at (500, 20)
+- **Safe spawn area**: Section 1 has starting platform at (500, 20)
 - **Progress-based upgrades**: Triggered every `SECTION_HEIGHT` descent
+- **Green safety platforms**: Healing platforms between sections (color == GREEN)
 
 ## Development Conventions
 
@@ -81,12 +83,17 @@ if current_progress > self.last_progress:
 ### Input System Architecture
 
 - **Discrete actions**: Use `pygame.KEYDOWN` events (jumping, sliding)
-- **Continuous actions**: Check key sets in main loop (movement, charging)
-- **Charge attacks**: Track time in main loop, apply damage on `MOUSEBUTTONUP`
+- **Continuous actions**: Check key sets in main loop (movement)
+- **Attack system**: Still implemented but unused (no enemies to attack)
+- **Legacy features**: Charge attacks and combat exist but serve no purpose
 
-### Enemy AI Pattern
+### Legacy Systems (Currently Unused)
 
-Simple but effective: patrol within `ENEMY_PATROL_RANGE` of spawn point, reverse direction at platform edges or range limits.
+Enemy and cheese systems remain in codebase but are disabled:
+
+- **Enemy AI**: Complete patrol system exists but no enemies spawn
+- **Cheese collection**: Collection mechanics exist but no cheese spawns
+- **Combat system**: Attack/defense mechanics functional but purposeless
 
 ## Testing & Debugging
 
@@ -115,12 +122,12 @@ pip install pygame>=2.0.0  # Minimal dependency
 
 ### Section Progression Design
 
-1. **Section 0**: Safe tutorial area with welcome cheese
-2. **Sections 1-2**: Basic platforming with sparse enemies
-3. **Section 3**: Combat-heavy with boss enemies
-4. **Section 4**: Precision platforming with small platforms
-5. **Section 5**: Final boss area and victory condition
+1. **Section 1**: Safe tutorial area with starting platform at (500, 20)
+2. **Section 2**: Basic platforming with varied platform sizes
+3. **Section 3**: Combat platform layouts (enemies removed, platforms remain)
+4. **Section 4**: Precision platforming with small platforms (60x15, 50x15)
+5. **Section 5**: Final challenge area and victory condition (ground level)
 
 ### Upgrade System Balance
 
-Three upgrade types per checkpoint: health restoration (+30), attack boost (+5), extra jump capability. System prevents overpowered combinations through section-gated progression.
+Three upgrade types per checkpoint: health restoration (+30), attack boost (+5), extra jump capability. Health/healing systems remain functional for safe platform interactions.

@@ -48,32 +48,11 @@ class LevelGenerator:
             ]
         )
 
-        # 敵人（遠離安全區域）
-        enemies.extend(
-            [
-                Enemy(100, base_y + 50, "basic"),  # 在左下方平台
-                Enemy(270, base_y + 90, "basic"),  # 在中間平台
-                Enemy(270, base_y + 220, "basic"),  # 在下方平台
-                Enemy(440, base_y + 190, "basic"),  # 在右下方平台
-            ]
-        )
+        # 敵人（已移除）
+        # enemies.extend([])
 
-        # 起司
-        cheeses.extend(
-            [
-                # 安全平台上的歡迎起司
-                Cheese(450, base_y - 10),  # 在安全平台上
-                Cheese(500, base_y - 10),  # 在安全平台上
-                Cheese(550, base_y - 10),  # 在安全平台上
-                # 其他區域的起司
-                Cheese(120, base_y + 50),
-                Cheese(290, base_y + 90),
-                Cheese(290, base_y + 220),
-                Cheese(460, base_y + 190),
-                Cheese(350, base_y + 350),
-                Cheese(550, base_y + 330),
-            ]
-        )
+        # 起司（已移除）
+        # cheeses.extend([])
 
         return platforms, enemies, cheeses
 
@@ -106,37 +85,11 @@ class LevelGenerator:
             ]
         )
 
-        # 巡邏敵人
-        enemies.extend(
-            [
-                Enemy(120, base_y + 20, "basic"),
-                Enemy(400, base_y + 20, "basic"),
-                Enemy(670, base_y + 40, "basic"),
-                Enemy(220, base_y + 120, "basic"),
-                Enemy(470, base_y + 140, "basic"),
-                Enemy(720, base_y + 160, "basic"),
-                Enemy(180, base_y + 250, "basic"),
-                Enemy(380, base_y + 290, "basic"),
-                Enemy(580, base_y + 270, "basic"),
-            ]
-        )
+        # 巡邏敵人（已移除）
+        # enemies.extend([])
 
-        # 更多起司獎勵
-        cheeses.extend(
-            [
-                Cheese(130, base_y + 20),
-                Cheese(280, base_y + 50),
-                Cheese(410, base_y + 20),
-                Cheese(560, base_y + 70),
-                Cheese(680, base_y + 40),
-                Cheese(230, base_y + 120),
-                Cheese(360, base_y + 170),
-                Cheese(480, base_y + 140),
-                Cheese(610, base_y + 190),
-                Cheese(380, base_y + 290),
-                Cheese(580, base_y + 270),
-            ]
-        )
+        # 更多起司獎勵（已移除）
+        # cheeses.extend([])
 
         return platforms, enemies, cheeses
 
@@ -166,52 +119,11 @@ class LevelGenerator:
             ]
         )
 
-        # 大量敵人
-        enemies.extend(
-            [
-                Enemy(20, base_y + 50, "basic"),
-                Enemy(100, base_y + 50, "basic"),
-                Enemy(240, base_y + 90, "basic"),
-                Enemy(320, base_y + 90, "basic"),
-                Enemy(440, base_y + 50, "basic"),
-                Enemy(520, base_y + 50, "basic"),
-                Enemy(660, base_y + 110, "basic"),
-                Enemy(740, base_y + 110, "boss"),
-                Enemy(120, base_y + 170, "basic"),
-                Enemy(200, base_y + 170, "basic"),
-                Enemy(370, base_y + 210, "basic"),
-                Enemy(450, base_y + 210, "basic"),
-                Enemy(600, base_y + 170, "basic"),
-                Enemy(680, base_y + 170, "boss"),
-                Enemy(70, base_y + 290, "basic"),
-                Enemy(150, base_y + 290, "basic"),
-                Enemy(270, base_y + 330, "basic"),
-                Enemy(440, base_y + 300, "basic"),
-                Enemy(520, base_y + 300, "basic"),
-                Enemy(640, base_y + 350, "boss"),
-                Enemy(800, base_y + 320, "boss"),
-            ]
-        )
+        # 大量敵人（已移除）
+        # enemies.extend([])
 
-        # 豐富的起司獎勵
-        cheeses.extend(
-            [
-                Cheese(50, base_y + 50),
-                Cheese(130, base_y + 50),
-                Cheese(270, base_y + 90),
-                Cheese(350, base_y + 90),
-                Cheese(470, base_y + 50),
-                Cheese(550, base_y + 50),
-                Cheese(150, base_y + 170),
-                Cheese(230, base_y + 170),
-                Cheese(400, base_y + 210),
-                Cheese(480, base_y + 210),
-                Cheese(100, base_y + 290),
-                Cheese(300, base_y + 330),
-                Cheese(470, base_y + 300),
-                Cheese(670, base_y + 350),
-            ]
-        )
+        # 豐富的起司獎勵（已移除）
+        # cheeses.extend([])
 
         return platforms, enemies, cheeses
 
@@ -255,61 +167,11 @@ class LevelGenerator:
             ]
         )
 
-        # 精英敵人
-        enemies.extend(
-            [
-                Enemy(140, base_y + 30, "basic"),
-                Enemy(240, base_y + 60, "basic"),
-                Enemy(330, base_y + 30, "basic"),
-                Enemy(430, base_y + 70, "basic"),
-                Enemy(520, base_y + 40, "basic"),
-                Enemy(620, base_y + 80, "basic"),
-                Enemy(710, base_y + 50, "basic"),
-                Enemy(100, base_y + 140, "boss"),
-                Enemy(200, base_y + 110, "basic"),
-                Enemy(290, base_y + 150, "basic"),
-                Enemy(370, base_y + 120, "boss"),
-                Enemy(470, base_y + 160, "basic"),
-                Enemy(560, base_y + 130, "basic"),
-                Enemy(640, base_y + 170, "boss"),
-                Enemy(740, base_y + 140, "basic"),
-                Enemy(180, base_y + 240, "boss"),
-                Enemy(310, base_y + 210, "basic"),
-                Enemy(430, base_y + 250, "boss"),
-                Enemy(550, base_y + 220, "basic"),
-                Enemy(670, base_y + 260, "boss"),
-            ]
-        )
+        # 精英敵人（已移除）
+        # enemies.extend([])
 
-        # 高價值起司
-        cheeses.extend(
-            [
-                Cheese(150, base_y + 30),
-                Cheese(250, base_y + 60),
-                Cheese(340, base_y + 30),
-                Cheese(440, base_y + 70),
-                Cheese(530, base_y + 40),
-                Cheese(630, base_y + 80),
-                Cheese(720, base_y + 50),
-                Cheese(110, base_y + 140),
-                Cheese(210, base_y + 110),
-                Cheese(300, base_y + 150),
-                Cheese(380, base_y + 120),
-                Cheese(480, base_y + 160),
-                Cheese(570, base_y + 130),
-                Cheese(650, base_y + 170),
-                Cheese(750, base_y + 140),
-                Cheese(190, base_y + 240),
-                Cheese(320, base_y + 210),
-                Cheese(440, base_y + 250),
-                Cheese(560, base_y + 220),
-                Cheese(680, base_y + 260),
-                Cheese(130, base_y + 320),
-                Cheese(330, base_y + 350),
-                Cheese(530, base_y + 330),
-                Cheese(730, base_y + 360),
-            ]
-        )
+        # 高價值起司（已移除）
+        # cheeses.extend([])
 
         return platforms, enemies, cheeses
 
@@ -335,41 +197,11 @@ class LevelGenerator:
             ]
         )
 
-        # Boss和最終敵人
-        enemies.extend(
-            [
-                Enemy(250, base_y + 70, "boss"),  # 主Boss
-                Enemy(300, base_y + 70, "boss"),  # 副Boss
-                Enemy(520, base_y + 120, "boss"),
-                Enemy(120, base_y + 170, "boss"),
-                Enemy(370, base_y + 220, "boss"),
-                Enemy(620, base_y + 190, "boss"),
-                Enemy(200, base_y + 290, "boss"),
-                Enemy(300, base_y + 290, "boss"),
-                Enemy(520, base_y + 330, "boss"),
-                Enemy(770, base_y + 310, "boss"),
-            ]
-        )
+        # Boss和最終敵人（已移除）
+        # enemies.extend([])
 
-        # 最終獎勵起司
-        cheeses.extend(
-            [
-                Cheese(260, base_y + 70),
-                Cheese(310, base_y + 70),
-                Cheese(530, base_y + 120),
-                Cheese(130, base_y + 170),
-                Cheese(380, base_y + 220),
-                Cheese(630, base_y + 190),
-                Cheese(220, base_y + 290),
-                Cheese(320, base_y + 290),
-                Cheese(530, base_y + 330),
-                Cheese(780, base_y + 310),
-                Cheese(200, base_y + 420),  # 終點獎勵
-                Cheese(400, base_y + 420),
-                Cheese(600, base_y + 420),
-                Cheese(800, base_y + 420),
-            ]
-        )
+        # 最終獎勵起司（已移除）
+        # cheeses.extend([])
 
         return platforms, enemies, cheeses
 
@@ -412,13 +244,13 @@ class LevelGenerator:
             ]
         )
 
-        # 在安全平台上放置治療起司
-        cheese_spacing = 80
-        cheese_start_x = main_platform_x + 50
-        for i in range(6):  # 6個治療起司
-            cheese_x = cheese_start_x + i * cheese_spacing
-            if cheese_x < main_platform_x + main_platform_width - 50:
-                cheeses.append(Cheese(cheese_x, section_start_y - 80))
+        # 在安全平台上放置治療起司（已移除）
+        # cheese_spacing = 80
+        # cheese_start_x = main_platform_x + 50
+        # for i in range(6):  # 6個治療起司
+        #     cheese_x = cheese_start_x + i * cheese_spacing
+        #     if cheese_x < main_platform_x + main_platform_width - 50:
+        #         cheeses.append(Cheese(cheese_x, section_start_y - 80))
 
         return platforms, cheeses
 
@@ -447,12 +279,14 @@ class LevelGenerator:
                     base_y
                 )
                 all_platforms.extend(safe_platforms)
-                all_cheeses.extend(safe_cheeses)
+                # 安全起司已移除
+                # all_cheeses.extend(safe_cheeses)
 
             # 生成該區域的內容
             platforms, enemies, cheeses = section_func(base_y)
             all_platforms.extend(platforms)
-            all_enemies.extend(enemies)
-            all_cheeses.extend(cheeses)
+            # 敵人和起司已移除
+            # all_enemies.extend(enemies)
+            # all_cheeses.extend(cheeses)
 
         return all_platforms, all_enemies, all_cheeses
