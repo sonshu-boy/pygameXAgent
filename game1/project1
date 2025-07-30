@@ -1,0 +1,1269 @@
+import pygame
+import sys
+import random
+import math
+
+# 初始化pygame
+pygame.init()
+
+# 設定視窗大小
+WINDOW_WIDTH = 1000
+WINDOW_HEIGHT = 800
+screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+
+# 設定視窗標題
+pygame.display.set_caption("起司小子的塔樓冒險")
+
+# 定義顏色
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
+YELLOW = (255, 255, 0)
+BROWN = (139, 69, 19)
+GRAY = (128, 128, 128)
+ORANGE = (255, 165, 0)
+PINK = (255, 192, 203)
+PURPLE = (128, 0, 128)
+DARK_GRAY = (64, 64, 64)
+
+# 遊戲常數
+GRAVITY = 0.6
+JUMP_STRENGTH = -12
+PLAYER_SPEED = 5
+PLAYER_RUN_SPEED = 8
+ATTACK_DAMAGE = 20
+CHEESE_HEAL = 10
+
+# 初始化字體
+try:
+    font_large = pygame.font.Font("C:/Windows/Fonts/msjh.ttc", 36)
+    font_medium = pygame.font.Font("C:/Windows/Fonts/msjh.ttc", 24)
+    font_small = pygame.font.Font("C:/Windows/Fonts/msjh.ttc", 18)
+except:
+    font_large = pygame.font.Font(None, 36)
+    font_medium = pygame.font.Font(None, 24)
+    font_small = pygame.font.Font(None, 18)
+
+
+class Player:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.width = 30
+        self.height = 40
+        self.vel_x = 0
+        self.vel_y = 0
+        self.on_ground = False
+        self.max_health = 100
+        self.health = self.max_health
+        self.attack_power = ATTACK_DAMAGE
+        self.facing_right = True
+        self.is_attacking = False
+        self.attack_timer = 0
+        self.attack_charge = 0
+        self.max_attack_charge = 60
+        self.is_defending = False
+        self.slide_timer = 0
+        self.slide_cooldown = 0
+        self.cheese_count = 0
+        self.jump_hold_timer = 0
+        self.max_jump_hold = 15  # 最大跳躍蓄力時間
+        self.jump_count = 0
+        self.max_jumps = 2  # 最大跳躍次數（雙重跳躍）
+        self.coyote_time = 0  # 離開平台後還能跳躍的時間
+        self.max_coyote_time = 6
+
+    def update(self, platforms, enemies):
+        # 重力
+        if not self.on_ground:
+            self.vel_y += GRAVITY
+
+        # 限制下降速度
+        if self.vel_y > 15:
+            self.vel_y = 15
+
+        # 更新位置
+        self.x += self.vel_x
+        self.y += self.vel_y
+
+        # 攻擊計時器
+        if self.is_attacking:
+            self.attack_timer -= 1
+            if self.attack_timer <= 0:
+                self.is_attacking = False
+
+        # 滑行計時器
+        if self.slide_timer > 0:
+            self.slide_timer -= 1
+
+        if self.slide_cooldown > 0:
+            self.slide_cooldown -= 1
+
+        # 跳躍蓄力計時器
+        if self.jump_hold_timer > 0:
+            self.jump_hold_timer -= 1
+
+        # 土狼時間（離開平台後的短暫跳躍窗口）
+        if self.on_ground:
+            self.jump_count = 0
+            self.coyote_time = self.max_coyote_time
+        else:
+            if self.coyote_time > 0:
+                self.coyote_time -= 1
+
+        # 碰撞檢測
+        self.check_platform_collision(platforms)
+        self.check_enemy_collision(enemies)
+
+        # 邊界檢查
+        if self.x < 0:
+            self.x = 0
+        elif self.x > WINDOW_WIDTH - self.width:
+            self.x = WINDOW_WIDTH - self.width
+
+    def check_platform_collision(self, platforms):
+        player_rect = pygame.Rect(self.x, self.y, self.width, self.height)
+        self.on_ground = False
+
+        for platform in platforms:
+            if player_rect.colliderect(platform.rect):
+                # 從上方落下 - 更精確的碰撞檢測
+                if self.vel_y > 0 and self.y < platform.rect.top - 5:
+                    self.y = platform.rect.top - self.height
+                    self.vel_y = 0
+                    self.on_ground = True
+                # 從下方撞上
+                elif self.vel_y < 0 and self.y > platform.rect.bottom:
+                    self.y = platform.rect.bottom
+                    self.vel_y = 0
+                # 從左側撞上
+                elif self.vel_x > 0 and self.x < platform.rect.left - 5:
+                    self.x = platform.rect.left - self.width
+                    self.vel_x = 0
+                # 從右側撞上
+                elif self.vel_x < 0 and self.x > platform.rect.right:
+                    self.x = platform.rect.right
+                    self.vel_x = 0
+
+    def check_enemy_collision(self, enemies):
+        player_rect = pygame.Rect(self.x, self.y, self.width, self.height)
+
+        for enemy in enemies:
+            if player_rect.colliderect(enemy.get_rect()) and enemy.health > 0:
+                if not self.is_defending:
+                    self.take_damage(10)
+
+    def jump(self):
+        # 允許連續跳躍：在地面上、土狼時間內、或還有空中跳躍次數
+        can_jump = (
+            self.on_ground or self.coyote_time > 0 or self.jump_count < self.max_jumps
+        )
+
+        if can_jump:
+            if self.on_ground or self.coyote_time > 0:
+                # 地面跳躍或土狼跳躍
+                self.vel_y = JUMP_STRENGTH
+                self.jump_count = 1
+                self.coyote_time = 0
+            else:
+                # 空中跳躍
+                self.vel_y = JUMP_STRENGTH * 0.8  # 空中跳躍稍弱一些
+                self.jump_count += 1
+
+            self.on_ground = False
+            self.jump_hold_timer = self.max_jump_hold
+
+    def continue_jump(self):
+        # 變長跳躍 - 按住空白鍵可以跳得更高
+        if self.jump_hold_timer > 0 and self.vel_y < 0:
+            self.vel_y += -0.3  # 額外的上升力
+
+    def move_left(self, running=False):
+        speed = PLAYER_RUN_SPEED if running else PLAYER_SPEED
+        self.vel_x = -speed
+        self.facing_right = False
+
+    def move_right(self, running=False):
+        speed = PLAYER_RUN_SPEED if running else PLAYER_SPEED
+        self.vel_x = speed
+        self.facing_right = True
+
+    def stop_moving(self):
+        self.vel_x = 0
+
+    def slide(self):
+        if self.slide_cooldown <= 0 and self.on_ground:
+            self.slide_timer = 20
+            self.slide_cooldown = 60
+            slide_speed = 12 if self.facing_right else -12
+            self.vel_x = slide_speed
+
+    def attack(self, enemies, charge_time=0):
+        if not self.is_attacking:
+            self.is_attacking = True
+            self.attack_timer = 30
+
+            # 計算攻擊範圍
+            attack_width = 60 if charge_time >= self.max_attack_charge else 40
+            attack_height = 40
+            attack_x = (
+                self.x + self.width if self.facing_right else self.x - attack_width
+            )
+            attack_y = self.y
+
+            attack_rect = pygame.Rect(attack_x, attack_y, attack_width, attack_height)
+
+            # 傷害計算
+            damage = self.attack_power
+            if charge_time >= self.max_attack_charge:
+                damage *= 2  # 蓄力攻擊雙倍傷害
+
+            # 攻擊敵人
+            for enemy in enemies:
+                if attack_rect.colliderect(enemy.get_rect()):
+                    enemy.take_damage(damage)
+
+    def take_damage(self, damage):
+        self.health -= damage
+        if self.health < 0:
+            self.health = 0
+
+    def heal(self, amount):
+        self.health += amount
+        if self.health > self.max_health:
+            self.health = self.max_health
+
+    def collect_cheese(self):
+        self.cheese_count += 1
+        self.heal(CHEESE_HEAL)
+
+    def get_rect(self):
+        return pygame.Rect(self.x, self.y, self.width, self.height)
+
+    def draw(self, surface):
+        # 玩家身體（老鼠）
+        color = PINK if self.slide_timer > 0 else GRAY
+        pygame.draw.rect(surface, color, (self.x, self.y, self.width, self.height))
+
+        # 老鼠耳朵
+        ear_size = 8
+        if self.facing_right:
+            pygame.draw.circle(surface, color, (self.x + 5, self.y + 5), ear_size)
+            pygame.draw.circle(surface, color, (self.x + 15, self.y + 5), ear_size)
+        else:
+            pygame.draw.circle(
+                surface, color, (self.x + self.width - 15, self.y + 5), ear_size
+            )
+            pygame.draw.circle(
+                surface, color, (self.x + self.width - 5, self.y + 5), ear_size
+            )
+
+        # 老鼠眼睛
+        eye_color = RED if self.health < 30 else BLACK
+        if self.facing_right:
+            pygame.draw.circle(surface, eye_color, (self.x + 8, self.y + 12), 3)
+            pygame.draw.circle(surface, eye_color, (self.x + 18, self.y + 12), 3)
+        else:
+            pygame.draw.circle(
+                surface, eye_color, (self.x + self.width - 18, self.y + 12), 3
+            )
+            pygame.draw.circle(
+                surface, eye_color, (self.x + self.width - 8, self.y + 12), 3
+            )
+
+        # 攻擊效果
+        if self.is_attacking:
+            attack_width = 40
+            attack_height = 40
+            attack_x = (
+                self.x + self.width if self.facing_right else self.x - attack_width
+            )
+            attack_y = self.y
+            pygame.draw.rect(
+                surface, YELLOW, (attack_x, attack_y, attack_width, attack_height), 3
+            )
+
+        # 防禦效果
+        if self.is_defending:
+            pygame.draw.circle(
+                surface,
+                BLUE,
+                (self.x + self.width // 2, self.y + self.height // 2),
+                max(self.width, self.height) // 2 + 5,
+                3,
+            )
+
+
+class Platform:
+    def __init__(self, x, y, width, height, color=BROWN):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.color = color
+
+    def draw(self, surface):
+        pygame.draw.rect(surface, self.color, self.rect)
+        pygame.draw.rect(surface, BLACK, self.rect, 2)
+
+
+class Enemy:
+    def __init__(self, x, y, enemy_type="basic"):
+        self.x = x
+        self.y = y
+        self.width = 25
+        self.height = 30
+        self.enemy_type = enemy_type
+        self.health = 40 if enemy_type == "basic" else 80
+        self.max_health = self.health
+        self.speed = 2 if enemy_type == "basic" else 1
+        self.direction = random.choice([-1, 1])
+        self.attack_timer = 0
+        self.patrol_range = 100
+        self.start_x = x
+
+    def update(self, platforms, player):
+        # 簡單的巡邏AI
+        self.x += self.direction * self.speed
+
+        # 巡邏範圍限制
+        if abs(self.x - self.start_x) > self.patrol_range:
+            self.direction *= -1
+
+        # 平台邊緣檢測
+        on_platform = False
+        for platform in platforms:
+            enemy_rect = pygame.Rect(self.x, self.y + self.height, self.width, 1)
+            if enemy_rect.colliderect(platform.rect):
+                on_platform = True
+                break
+
+        if not on_platform:
+            self.direction *= -1
+
+        # 攻擊計時器
+        if self.attack_timer > 0:
+            self.attack_timer -= 1
+
+    def take_damage(self, damage):
+        self.health -= damage
+        if self.health < 0:
+            self.health = 0
+
+    def get_rect(self):
+        return pygame.Rect(self.x, self.y, self.width, self.height)
+
+    def draw(self, surface):
+        if self.health > 0:
+            # 敵人身體
+            color = RED if self.enemy_type == "boss" else PURPLE
+            pygame.draw.rect(surface, color, (self.x, self.y, self.width, self.height))
+
+            # 敵人眼睛
+            pygame.draw.circle(surface, BLACK, (self.x + 6, self.y + 8), 2)
+            pygame.draw.circle(surface, BLACK, (self.x + self.width - 6, self.y + 8), 2)
+
+            # 血條
+            if self.health < self.max_health:
+                bar_width = self.width
+                bar_height = 4
+                bar_x = self.x
+                bar_y = self.y - 8
+
+                # 血條背景
+                pygame.draw.rect(surface, RED, (bar_x, bar_y, bar_width, bar_height))
+
+                # 血條
+                health_width = int(bar_width * (self.health / self.max_health))
+                pygame.draw.rect(
+                    surface, GREEN, (bar_x, bar_y, health_width, bar_height)
+                )
+
+
+class Cheese:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.width = 20
+        self.height = 15
+        self.collected = False
+        self.bob_offset = 0
+        self.bob_speed = 0.1
+
+    def update(self):
+        # 起司上下浮動效果
+        self.bob_offset += self.bob_speed
+
+    def collect(self):
+        self.collected = True
+
+    def get_rect(self):
+        return pygame.Rect(
+            self.x, self.y + math.sin(self.bob_offset) * 3, self.width, self.height
+        )
+
+    def draw(self, surface):
+        if not self.collected:
+            y_pos = self.y + math.sin(self.bob_offset) * 3
+            # 起司形狀
+            pygame.draw.rect(surface, YELLOW, (self.x, y_pos, self.width, self.height))
+            pygame.draw.circle(surface, YELLOW, (self.x + 5, y_pos + 3), 3)
+            pygame.draw.circle(surface, YELLOW, (self.x + 15, y_pos + 8), 2)
+            # 起司孔洞
+            pygame.draw.circle(surface, ORANGE, (self.x + 8, y_pos + 8), 2)
+            pygame.draw.circle(surface, ORANGE, (self.x + 4, y_pos + 6), 1)
+
+
+class Game:
+    def __init__(self):
+        self.level = 1
+        self.max_level = 5  # 增加關卡數量
+        self.player = Player(100, 50)
+        self.platforms = []
+        self.enemies = []
+        self.cheeses = []
+        self.camera_y = 0
+        self.game_state = "playing"  # playing, game_over, victory, upgrade
+        self.upgrade_options = []
+        self.total_tower_height = WINDOW_HEIGHT * 8  # 總塔高度更高
+
+        self.create_level()
+
+    def create_level(self):
+        self.platforms.clear()
+        self.enemies.clear()
+        self.cheeses.clear()
+
+        # 創建一個連續的塔樓，分為多個區域
+        self.create_continuous_tower()
+
+    def create_continuous_tower(self):
+        # 塔樓分為多個區域，每個區域有不同的挑戰
+        section_height = WINDOW_HEIGHT * 1.5
+
+        # 區域1：入門區域（頂部）
+        self.create_section_1(0)
+
+        # 區域2：平台跳躍區域
+        self.create_section_2(section_height)
+
+        # 區域3：敵人密集區域
+        self.create_section_3(section_height * 2)
+
+        # 區域4：精密跳躍區域
+        self.create_section_4(section_height * 3)
+
+        # 區域5：Boss區域和終點
+        self.create_section_5(section_height * 4)
+
+    def create_section_1(self, base_y):
+        """區域1：入門區域 - 簡單的平台和基礎敵人"""
+        # 起始平台
+        self.platforms.extend(
+            [
+                Platform(80, base_y + 80, 120, 20),
+                Platform(250, base_y + 120, 100, 20),
+                Platform(400, base_y + 90, 120, 20),
+                Platform(580, base_y + 140, 100, 20),
+                Platform(750, base_y + 100, 120, 20),
+                Platform(50, base_y + 200, 150, 20),
+                Platform(250, base_y + 250, 120, 20),
+                Platform(420, base_y + 220, 100, 20),
+                Platform(580, base_y + 280, 120, 20),
+                Platform(750, base_y + 240, 100, 20),
+                # 連接到下一區域的平台
+                Platform(0, base_y + 350, 200, 20),
+                Platform(300, base_y + 380, 150, 20),
+                Platform(500, base_y + 360, 200, 20),
+                Platform(750, base_y + 400, 150, 20),
+            ]
+        )
+
+        # 敵人
+        self.enemies.extend(
+            [
+                Enemy(100, base_y + 50, "basic"),
+                Enemy(270, base_y + 90, "basic"),
+                Enemy(420, base_y + 60, "basic"),
+                Enemy(270, base_y + 220, "basic"),
+                Enemy(440, base_y + 190, "basic"),
+            ]
+        )
+
+        # 起司
+        self.cheeses.extend(
+            [
+                Cheese(120, base_y + 50),
+                Cheese(290, base_y + 90),
+                Cheese(450, base_y + 60),
+                Cheese(290, base_y + 220),
+                Cheese(460, base_y + 190),
+                Cheese(350, base_y + 350),
+                Cheese(550, base_y + 330),
+            ]
+        )
+
+    def create_section_2(self, base_y):
+        """區域2：平台跳躍區域 - 需要精確跳躍的平台"""
+        # 跳躍挑戰平台
+        self.platforms.extend(
+            [
+                Platform(100, base_y + 50, 80, 20),
+                Platform(250, base_y + 80, 60, 20),
+                Platform(380, base_y + 50, 80, 20),
+                Platform(530, base_y + 100, 60, 20),
+                Platform(650, base_y + 70, 80, 20),
+                Platform(800, base_y + 120, 60, 20),
+                Platform(50, base_y + 180, 100, 20),
+                Platform(200, base_y + 150, 80, 20),
+                Platform(330, base_y + 200, 60, 20),
+                Platform(450, base_y + 170, 80, 20),
+                Platform(580, base_y + 220, 60, 20),
+                Platform(700, base_y + 190, 100, 20),
+                Platform(150, base_y + 280, 120, 20),
+                Platform(350, base_y + 320, 100, 20),
+                Platform(550, base_y + 300, 120, 20),
+                Platform(750, base_y + 350, 100, 20),
+            ]
+        )
+
+        # 巡邏敵人
+        self.enemies.extend(
+            [
+                Enemy(120, base_y + 20, "basic"),
+                Enemy(400, base_y + 20, "basic"),
+                Enemy(670, base_y + 40, "basic"),
+                Enemy(220, base_y + 120, "basic"),
+                Enemy(470, base_y + 140, "basic"),
+                Enemy(720, base_y + 160, "basic"),
+                Enemy(180, base_y + 250, "basic"),
+                Enemy(380, base_y + 290, "basic"),
+                Enemy(580, base_y + 270, "basic"),
+            ]
+        )
+
+        # 更多起司獎勵
+        self.cheeses.extend(
+            [
+                Cheese(130, base_y + 20),
+                Cheese(280, base_y + 50),
+                Cheese(410, base_y + 20),
+                Cheese(560, base_y + 70),
+                Cheese(680, base_y + 40),
+                Cheese(230, base_y + 120),
+                Cheese(360, base_y + 170),
+                Cheese(480, base_y + 140),
+                Cheese(610, base_y + 190),
+                Cheese(380, base_y + 290),
+                Cheese(580, base_y + 270),
+            ]
+        )
+
+    def create_section_3(self, base_y):
+        """區域3：敵人密集區域 - 更多戰鬥挑戰"""
+        # 戰鬥平台
+        self.platforms.extend(
+            [
+                Platform(0, base_y + 80, 180, 20),
+                Platform(220, base_y + 120, 160, 20),
+                Platform(420, base_y + 80, 180, 20),
+                Platform(640, base_y + 140, 160, 20),
+                Platform(820, base_y + 100, 120, 20),
+                Platform(100, base_y + 200, 200, 20),
+                Platform(350, base_y + 240, 180, 20),
+                Platform(580, base_y + 200, 200, 20),
+                Platform(50, base_y + 320, 150, 20),
+                Platform(250, base_y + 360, 120, 20),
+                Platform(420, base_y + 330, 150, 20),
+                Platform(620, base_y + 380, 120, 20),
+                Platform(780, base_y + 350, 150, 20),
+            ]
+        )
+
+        # 大量敵人
+        self.enemies.extend(
+            [
+                Enemy(20, base_y + 50, "basic"),
+                Enemy(100, base_y + 50, "basic"),
+                Enemy(240, base_y + 90, "basic"),
+                Enemy(320, base_y + 90, "basic"),
+                Enemy(440, base_y + 50, "basic"),
+                Enemy(520, base_y + 50, "basic"),
+                Enemy(660, base_y + 110, "basic"),
+                Enemy(740, base_y + 110, "boss"),
+                Enemy(120, base_y + 170, "basic"),
+                Enemy(200, base_y + 170, "basic"),
+                Enemy(370, base_y + 210, "basic"),
+                Enemy(450, base_y + 210, "basic"),
+                Enemy(600, base_y + 170, "basic"),
+                Enemy(680, base_y + 170, "boss"),
+                Enemy(70, base_y + 290, "basic"),
+                Enemy(150, base_y + 290, "basic"),
+                Enemy(270, base_y + 330, "basic"),
+                Enemy(440, base_y + 300, "basic"),
+                Enemy(520, base_y + 300, "basic"),
+                Enemy(640, base_y + 350, "boss"),
+                Enemy(800, base_y + 320, "boss"),
+            ]
+        )
+
+        # 豐富的起司獎勵
+        self.cheeses.extend(
+            [
+                Cheese(50, base_y + 50),
+                Cheese(130, base_y + 50),
+                Cheese(270, base_y + 90),
+                Cheese(350, base_y + 90),
+                Cheese(470, base_y + 50),
+                Cheese(550, base_y + 50),
+                Cheese(150, base_y + 170),
+                Cheese(230, base_y + 170),
+                Cheese(400, base_y + 210),
+                Cheese(480, base_y + 210),
+                Cheese(100, base_y + 290),
+                Cheese(300, base_y + 330),
+                Cheese(470, base_y + 300),
+                Cheese(670, base_y + 350),
+            ]
+        )
+
+    def create_section_4(self, base_y):
+        """區域4：精密跳躍區域 - 需要完美時機的挑戰"""
+        # 小型精密平台
+        self.platforms.extend(
+            [
+                Platform(120, base_y + 60, 60, 15),
+                Platform(220, base_y + 90, 50, 15),
+                Platform(310, base_y + 60, 60, 15),
+                Platform(410, base_y + 100, 50, 15),
+                Platform(500, base_y + 70, 60, 15),
+                Platform(600, base_y + 110, 50, 15),
+                Platform(690, base_y + 80, 60, 15),
+                Platform(790, base_y + 120, 50, 15),
+                Platform(80, base_y + 170, 70, 15),
+                Platform(180, base_y + 140, 60, 15),
+                Platform(270, base_y + 180, 50, 15),
+                Platform(350, base_y + 150, 70, 15),
+                Platform(450, base_y + 190, 60, 15),
+                Platform(540, base_y + 160, 50, 15),
+                Platform(620, base_y + 200, 70, 15),
+                Platform(720, base_y + 170, 60, 15),
+                Platform(810, base_y + 210, 50, 15),
+                Platform(150, base_y + 270, 80, 20),
+                Platform(280, base_y + 240, 70, 20),
+                Platform(400, base_y + 280, 80, 20),
+                Platform(520, base_y + 250, 70, 20),
+                Platform(640, base_y + 290, 80, 20),
+                Platform(760, base_y + 260, 70, 20),
+                Platform(100, base_y + 350, 120, 20),
+                Platform(300, base_y + 380, 100, 20),
+                Platform(500, base_y + 360, 120, 20),
+                Platform(700, base_y + 390, 100, 20),
+            ]
+        )
+
+        # 精英敵人
+        self.enemies.extend(
+            [
+                Enemy(140, base_y + 30, "basic"),
+                Enemy(240, base_y + 60, "basic"),
+                Enemy(330, base_y + 30, "basic"),
+                Enemy(430, base_y + 70, "basic"),
+                Enemy(520, base_y + 40, "basic"),
+                Enemy(620, base_y + 80, "basic"),
+                Enemy(710, base_y + 50, "basic"),
+                Enemy(100, base_y + 140, "boss"),
+                Enemy(200, base_y + 110, "basic"),
+                Enemy(290, base_y + 150, "basic"),
+                Enemy(370, base_y + 120, "boss"),
+                Enemy(470, base_y + 160, "basic"),
+                Enemy(560, base_y + 130, "basic"),
+                Enemy(640, base_y + 170, "boss"),
+                Enemy(740, base_y + 140, "basic"),
+                Enemy(180, base_y + 240, "boss"),
+                Enemy(310, base_y + 210, "basic"),
+                Enemy(430, base_y + 250, "boss"),
+                Enemy(550, base_y + 220, "basic"),
+                Enemy(670, base_y + 260, "boss"),
+            ]
+        )
+
+        # 高價值起司
+        self.cheeses.extend(
+            [
+                Cheese(150, base_y + 30),
+                Cheese(250, base_y + 60),
+                Cheese(340, base_y + 30),
+                Cheese(440, base_y + 70),
+                Cheese(530, base_y + 40),
+                Cheese(630, base_y + 80),
+                Cheese(720, base_y + 50),
+                Cheese(110, base_y + 140),
+                Cheese(210, base_y + 110),
+                Cheese(300, base_y + 150),
+                Cheese(380, base_y + 120),
+                Cheese(480, base_y + 160),
+                Cheese(570, base_y + 130),
+                Cheese(650, base_y + 170),
+                Cheese(750, base_y + 140),
+                Cheese(190, base_y + 240),
+                Cheese(320, base_y + 210),
+                Cheese(440, base_y + 250),
+                Cheese(560, base_y + 220),
+                Cheese(680, base_y + 260),
+                Cheese(130, base_y + 320),
+                Cheese(330, base_y + 350),
+                Cheese(530, base_y + 330),
+                Cheese(730, base_y + 360),
+            ]
+        )
+
+    def create_section_5(self, base_y):
+        """區域5：Boss區域和終點"""
+        # Boss戰平台和終點
+        self.platforms.extend(
+            [
+                Platform(200, base_y + 100, 200, 30),  # Boss戰平台
+                Platform(500, base_y + 150, 150, 20),
+                Platform(100, base_y + 200, 180, 20),
+                Platform(350, base_y + 250, 200, 20),
+                Platform(600, base_y + 220, 150, 20),
+                Platform(150, base_y + 320, 250, 30),  # 大型休息平台
+                Platform(500, base_y + 360, 200, 20),
+                Platform(750, base_y + 340, 150, 20),
+                Platform(0, base_y + 450, WINDOW_WIDTH, 50),  # 最終地面
+            ]
+        )
+
+        # Boss和最終敵人
+        self.enemies.extend(
+            [
+                Enemy(250, base_y + 70, "boss"),  # 主Boss
+                Enemy(300, base_y + 70, "boss"),  # 副Boss
+                Enemy(520, base_y + 120, "boss"),
+                Enemy(120, base_y + 170, "boss"),
+                Enemy(370, base_y + 220, "boss"),
+                Enemy(620, base_y + 190, "boss"),
+                Enemy(200, base_y + 290, "boss"),
+                Enemy(300, base_y + 290, "boss"),
+                Enemy(520, base_y + 330, "boss"),
+                Enemy(770, base_y + 310, "boss"),
+            ]
+        )
+
+        # 最終獎勵起司
+        self.cheeses.extend(
+            [
+                Cheese(260, base_y + 70),
+                Cheese(310, base_y + 70),
+                Cheese(530, base_y + 120),
+                Cheese(130, base_y + 170),
+                Cheese(380, base_y + 220),
+                Cheese(630, base_y + 190),
+                Cheese(220, base_y + 290),
+                Cheese(320, base_y + 290),
+                Cheese(530, base_y + 330),
+                Cheese(780, base_y + 310),
+                Cheese(200, base_y + 420),  # 終點獎勵
+                Cheese(400, base_y + 420),
+                Cheese(600, base_y + 420),
+                Cheese(800, base_y + 420),
+            ]
+        )
+
+    def update(self):
+        if self.game_state == "playing":
+            # 更新玩家
+            self.player.update(self.platforms, self.enemies)
+
+            # 更新敵人
+            for enemy in self.enemies:
+                enemy.update(self.platforms, self.player)
+
+            # 更新起司
+            for cheese in self.cheeses:
+                cheese.update()
+                if not cheese.collected and self.player.get_rect().colliderect(
+                    cheese.get_rect()
+                ):
+                    cheese.collect()
+                    self.player.collect_cheese()
+
+            # 更新攝影機
+            target_camera_y = self.player.y - WINDOW_HEIGHT // 2
+            self.camera_y += (target_camera_y - self.camera_y) * 0.1
+
+            # 檢查玩家是否死亡
+            if self.player.health <= 0:
+                self.game_state = "game_over"
+
+            # 檢查是否到達終點（連續關卡系統）
+            # 當玩家到達塔底時獲勝
+            if self.player.y >= self.total_tower_height - 200:
+                self.game_state = "victory"
+
+            # 基於高度的進度系統，每下降一定距離給予獎勵
+            current_progress = int(self.player.y / (WINDOW_HEIGHT * 1.5))
+            if current_progress > self.level and current_progress < 5:
+                self.level = current_progress
+                self.show_progress_reward()
+
+    def show_progress_reward(self):
+        """顯示進度獎勵選單"""
+        self.game_state = "upgrade"
+        self.upgrade_options = [
+            {"name": "恢復生命值 +30", "type": "health"},
+            {"name": "增加攻擊力 +5", "type": "attack"},
+            {"name": "獲得額外跳躍 (三段跳)", "type": "extra_jump"},
+        ]
+
+    def show_upgrade_menu(self):
+        """顯示升級選單"""
+        self.game_state = "upgrade"
+        self.upgrade_options = [
+            {"name": "增加生命值 +20", "type": "health"},
+            {"name": "增加攻擊力 +10", "type": "attack"},
+            {"name": "全回血", "type": "full_heal"},
+        ]
+
+    def apply_upgrade(self, upgrade_type):
+        if upgrade_type == "health":
+            self.player.max_health += 20
+            self.player.health = min(self.player.health + 30, self.player.max_health)
+        elif upgrade_type == "attack":
+            self.player.attack_power += 10
+        elif upgrade_type == "full_heal":
+            self.player.health = self.player.max_health
+        elif upgrade_type == "extra_jump":
+            self.player.max_jumps = min(self.player.max_jumps + 1, 3)  # 最多三段跳
+
+        self.game_state = "playing"
+
+    def reset_game(self):
+        self.level = 0  # 從0開始，表示在頂部
+        self.player = Player(100, 50)
+        self.camera_y = 0
+        self.game_state = "playing"
+        self.create_level()
+
+    def draw(self, surface):
+        # 清除螢幕
+        surface.fill(BLACK)
+
+        # 計算偏移量
+        offset_y = -self.camera_y
+
+        # 繪製平台
+        for platform in self.platforms:
+            draw_rect = pygame.Rect(
+                platform.rect.x,
+                platform.rect.y + offset_y,
+                platform.rect.width,
+                platform.rect.height,
+            )
+            if -50 <= draw_rect.y <= WINDOW_HEIGHT + 50:  # 只繪製螢幕內的物件
+                pygame.draw.rect(surface, platform.color, draw_rect)
+                pygame.draw.rect(surface, BLACK, draw_rect, 2)
+
+        # 繪製起司
+        for cheese in self.cheeses:
+            if not cheese.collected:
+                cheese_y = cheese.y + offset_y + math.sin(cheese.bob_offset) * 3
+                if -50 <= cheese_y <= WINDOW_HEIGHT + 50:
+                    pygame.draw.rect(
+                        surface,
+                        YELLOW,
+                        (cheese.x, cheese_y, cheese.width, cheese.height),
+                    )
+                    pygame.draw.circle(surface, YELLOW, (cheese.x + 5, cheese_y + 3), 3)
+                    pygame.draw.circle(
+                        surface, YELLOW, (cheese.x + 15, cheese_y + 8), 2
+                    )
+                    pygame.draw.circle(surface, ORANGE, (cheese.x + 8, cheese_y + 8), 2)
+                    pygame.draw.circle(surface, ORANGE, (cheese.x + 4, cheese_y + 6), 1)
+
+        # 繪製敵人
+        for enemy in self.enemies:
+            if enemy.health > 0:
+                enemy_y = enemy.y + offset_y
+                if -50 <= enemy_y <= WINDOW_HEIGHT + 50:
+                    color = RED if enemy.enemy_type == "boss" else PURPLE
+                    pygame.draw.rect(
+                        surface, color, (enemy.x, enemy_y, enemy.width, enemy.height)
+                    )
+                    pygame.draw.circle(surface, BLACK, (enemy.x + 6, enemy_y + 8), 2)
+                    pygame.draw.circle(
+                        surface, BLACK, (enemy.x + enemy.width - 6, enemy_y + 8), 2
+                    )
+
+                    # 血條
+                    if enemy.health < enemy.max_health:
+                        bar_y = enemy_y - 8
+                        pygame.draw.rect(surface, RED, (enemy.x, bar_y, enemy.width, 4))
+                        health_width = int(
+                            enemy.width * (enemy.health / enemy.max_health)
+                        )
+                        pygame.draw.rect(
+                            surface, GREEN, (enemy.x, bar_y, health_width, 4)
+                        )
+
+        # 繪製玩家
+        player_y = self.player.y + offset_y
+        if -50 <= player_y <= WINDOW_HEIGHT + 50:
+            color = PINK if self.player.slide_timer > 0 else GRAY
+            pygame.draw.rect(
+                surface,
+                color,
+                (self.player.x, player_y, self.player.width, self.player.height),
+            )
+
+            # 老鼠耳朵
+            ear_size = 8
+            if self.player.facing_right:
+                pygame.draw.circle(
+                    surface, color, (self.player.x + 5, player_y + 5), ear_size
+                )
+                pygame.draw.circle(
+                    surface, color, (self.player.x + 15, player_y + 5), ear_size
+                )
+            else:
+                pygame.draw.circle(
+                    surface,
+                    color,
+                    (self.player.x + self.player.width - 15, player_y + 5),
+                    ear_size,
+                )
+                pygame.draw.circle(
+                    surface,
+                    color,
+                    (self.player.x + self.player.width - 5, player_y + 5),
+                    ear_size,
+                )
+
+            # 老鼠眼睛
+            eye_color = RED if self.player.health < 30 else BLACK
+            if self.player.facing_right:
+                pygame.draw.circle(
+                    surface, eye_color, (self.player.x + 8, player_y + 12), 3
+                )
+                pygame.draw.circle(
+                    surface, eye_color, (self.player.x + 18, player_y + 12), 3
+                )
+            else:
+                pygame.draw.circle(
+                    surface,
+                    eye_color,
+                    (self.player.x + self.player.width - 18, player_y + 12),
+                    3,
+                )
+                pygame.draw.circle(
+                    surface,
+                    eye_color,
+                    (self.player.x + self.player.width - 8, player_y + 12),
+                    3,
+                )
+
+            # 攻擊效果
+            if self.player.is_attacking:
+                attack_width = 40
+                attack_height = 40
+                attack_x = (
+                    self.player.x + self.player.width
+                    if self.player.facing_right
+                    else self.player.x - attack_width
+                )
+                attack_y = player_y
+                pygame.draw.rect(
+                    surface,
+                    YELLOW,
+                    (attack_x, attack_y, attack_width, attack_height),
+                    3,
+                )
+
+            # 防禦效果
+            if self.player.is_defending:
+                pygame.draw.circle(
+                    surface,
+                    BLUE,
+                    (
+                        self.player.x + self.player.width // 2,
+                        player_y + self.player.height // 2,
+                    ),
+                    max(self.player.width, self.player.height) // 2 + 5,
+                    3,
+                )
+
+        # UI 元素
+        self.draw_ui(surface)
+
+    def draw_ui(self, surface):
+        # 血條
+        bar_width = 200
+        bar_height = 20
+        bar_x = 20
+        bar_y = 20
+
+        # 血條背景
+        pygame.draw.rect(surface, RED, (bar_x, bar_y, bar_width, bar_height))
+
+        # 血條
+        health_width = int(bar_width * (self.player.health / self.player.max_health))
+        pygame.draw.rect(surface, GREEN, (bar_x, bar_y, health_width, bar_height))
+
+        # 血條邊框
+        pygame.draw.rect(surface, WHITE, (bar_x, bar_y, bar_width, bar_height), 2)
+
+        # 血量文字
+        health_text = f"生命: {self.player.health}/{self.player.max_health}"
+        text_surface = font_small.render(health_text, True, WHITE)
+        surface.blit(text_surface, (bar_x, bar_y + bar_height + 5))
+
+        # 起司計數
+        cheese_text = f"起司: {self.player.cheese_count}"
+        text_surface = font_small.render(cheese_text, True, WHITE)
+        surface.blit(text_surface, (bar_x, bar_y + bar_height + 25))
+
+        # 進度顯示
+        progress = min(int(self.player.y / (WINDOW_HEIGHT * 1.5)), 4)
+        total_progress = 5
+        progress_text = f"進度: {progress + 1}/{total_progress}"
+        text_surface = font_small.render(progress_text, True, WHITE)
+        surface.blit(text_surface, (bar_x, bar_y + bar_height + 45))
+
+        # 高度顯示
+        height_text = f"高度: {int(self.player.y)}m"
+        text_surface = font_small.render(height_text, True, WHITE)
+        surface.blit(text_surface, (bar_x, bar_y + bar_height + 65))
+
+        # 跳躍能力顯示
+        jump_text = f"跳躍: {self.player.max_jumps}段跳"
+        text_surface = font_small.render(jump_text, True, WHITE)
+        surface.blit(text_surface, (bar_x, bar_y + bar_height + 85))
+
+        # 操作說明
+        controls = [
+            "操作說明:",
+            "A/D - 左右移動",
+            "S - 滑行",
+            "空白鍵 - 跳躍",
+            "長按空白 - 高跳躍",
+            "連續按空白 - 多段跳",
+            "左鍵 - 攻擊",
+            "長按左鍵 - 蓄力攻擊",
+            "右鍵 - 防禦",
+            "Shift - 跑步",
+        ]
+
+        for i, control in enumerate(controls):
+            text_surface = font_small.render(control, True, WHITE)
+            surface.blit(text_surface, (WINDOW_WIDTH - 200, 20 + i * 20))
+
+        # 遊戲狀態相關UI
+        if self.game_state == "game_over":
+            self.draw_game_over(surface)
+        elif self.game_state == "victory":
+            self.draw_victory(surface)
+        elif self.game_state == "upgrade":
+            self.draw_upgrade_menu(surface)
+
+    def draw_game_over(self, surface):
+        # 半透明背景
+        overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+        overlay.set_alpha(128)
+        overlay.fill(BLACK)
+        surface.blit(overlay, (0, 0))
+
+        # 遊戲結束文字
+        game_over_text = "遊戲結束！"
+        text_surface = font_large.render(game_over_text, True, RED)
+        text_rect = text_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 50)
+        )
+        surface.blit(text_surface, text_rect)
+
+        restart_text = "按 R 重新開始"
+        text_surface = font_medium.render(restart_text, True, WHITE)
+        text_rect = text_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 20)
+        )
+        surface.blit(text_surface, text_rect)
+
+    def draw_victory(self, surface):
+        # 半透明背景
+        overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+        overlay.set_alpha(128)
+        overlay.fill(BLACK)
+        surface.blit(overlay, (0, 0))
+
+        # 勝利文字
+        victory_text = "恭喜！起司小子成功回到地面！"
+        text_surface = font_large.render(victory_text, True, GREEN)
+        text_rect = text_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 50)
+        )
+        surface.blit(text_surface, text_rect)
+
+        score_text = f"收集起司數: {self.player.cheese_count}"
+        text_surface = font_medium.render(score_text, True, WHITE)
+        text_rect = text_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2)
+        )
+        surface.blit(text_surface, text_rect)
+
+        restart_text = "按 R 重新開始"
+        text_surface = font_medium.render(restart_text, True, WHITE)
+        text_rect = text_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 50)
+        )
+        surface.blit(text_surface, text_rect)
+
+    def draw_upgrade_menu(self, surface):
+        # 半透明背景
+        overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+        overlay.set_alpha(128)
+        overlay.fill(BLACK)
+        surface.blit(overlay, (0, 0))
+
+        # 升級選單標題
+        progress = min(int(self.player.y / (WINDOW_HEIGHT * 1.5)), 4)
+        title_text = f"到達區域 {progress + 1}！選擇獎勵："
+        text_surface = font_large.render(title_text, True, GREEN)
+        text_rect = text_surface.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 100)
+        )
+        surface.blit(text_surface, text_rect)
+
+        # 升級選項
+        for i, option in enumerate(self.upgrade_options):
+            option_text = f"{i+1}. {option['name']}"
+            text_surface = font_medium.render(option_text, True, WHITE)
+            text_rect = text_surface.get_rect(
+                center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 20 + i * 40)
+            )
+            surface.blit(text_surface, text_rect)
+
+
+# 遊戲主程式
+def main():
+    clock = pygame.time.Clock()
+    game = Game()
+
+    # 輸入狀態
+    keys_pressed = set()
+    mouse_pressed = set()
+    attack_charge_time = 0
+
+    while True:
+        # 處理事件
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+            elif event.type == pygame.KEYDOWN:
+                keys_pressed.add(event.key)
+
+                # 跳躍處理 - 移到事件處理避免重複跳躍
+                if event.key == pygame.K_SPACE and game.game_state == "playing":
+                    game.player.jump()
+
+                # 滑行處理 - 移到事件處理避免重複滑行
+                if event.key == pygame.K_s and game.game_state == "playing":
+                    game.player.slide()
+
+                # 重新開始
+                if event.key == pygame.K_r and game.game_state in [
+                    "game_over",
+                    "victory",
+                ]:
+                    game.reset_game()
+
+                # 升級選單選擇
+                if game.game_state == "upgrade":
+                    if event.key == pygame.K_1 and len(game.upgrade_options) > 0:
+                        game.apply_upgrade(game.upgrade_options[0]["type"])
+                    elif event.key == pygame.K_2 and len(game.upgrade_options) > 1:
+                        game.apply_upgrade(game.upgrade_options[1]["type"])
+                    elif event.key == pygame.K_3 and len(game.upgrade_options) > 2:
+                        game.apply_upgrade(game.upgrade_options[2]["type"])
+
+            elif event.type == pygame.KEYUP:
+                keys_pressed.discard(event.key)
+
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pressed.add(event.button)
+
+            elif event.type == pygame.MOUSEBUTTONUP:
+                if event.button == 1 and 1 in mouse_pressed:  # 左鍵釋放
+                    if game.game_state == "playing":
+                        game.player.attack(game.enemies, attack_charge_time)
+                    attack_charge_time = 0
+                mouse_pressed.discard(event.button)
+
+        if game.game_state == "playing":
+            # 處理持續按鍵
+            running = pygame.K_LSHIFT in keys_pressed or pygame.K_RSHIFT in keys_pressed
+
+            if pygame.K_a in keys_pressed:
+                game.player.move_left(running)
+            elif pygame.K_d in keys_pressed:
+                game.player.move_right(running)
+            else:
+                game.player.stop_moving()
+
+            # 變長跳躍 - 按住空白鍵持續施加上升力
+            if pygame.K_SPACE in keys_pressed:
+                game.player.continue_jump()
+
+            # 跳躍處理 - 已移到事件處理避免重複跳躍
+            pass
+
+            # 滑行處理 - 已移到事件處理
+            pass
+
+            # 防禦
+            game.player.is_defending = 3 in mouse_pressed  # 右鍵
+
+            # 蓄力攻擊
+            if 1 in mouse_pressed:  # 左鍵按住
+                attack_charge_time += 1
+                if attack_charge_time > game.player.max_attack_charge:
+                    attack_charge_time = game.player.max_attack_charge
+
+        # 更新遊戲
+        game.update()
+
+        # 繪製遊戲
+        game.draw(screen)
+
+        # 蓄力攻擊指示器
+        if attack_charge_time > 0 and game.game_state == "playing":
+            charge_width = 100
+            charge_height = 10
+            charge_x = WINDOW_WIDTH // 2 - charge_width // 2
+            charge_y = WINDOW_HEIGHT - 50
+
+            # 蓄力條背景
+            pygame.draw.rect(
+                screen, GRAY, (charge_x, charge_y, charge_width, charge_height)
+            )
+
+            # 蓄力條
+            charge_progress = attack_charge_time / game.player.max_attack_charge
+            charge_fill_width = int(charge_width * charge_progress)
+            color = YELLOW if charge_progress < 1.0 else RED
+            pygame.draw.rect(
+                screen, color, (charge_x, charge_y, charge_fill_width, charge_height)
+            )
+
+            # 蓄力條邊框
+            pygame.draw.rect(
+                screen, WHITE, (charge_x, charge_y, charge_width, charge_height), 2
+            )
+
+        # 更新顯示
+        pygame.display.flip()
+        clock.tick(60)
+
+
+if __name__ == "__main__":
+    main()
