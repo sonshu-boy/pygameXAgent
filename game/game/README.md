@@ -162,7 +162,7 @@ python main.py
 - 拳頭與敵人的碰撞處理
 - 地面和邊界碰撞
 
-## 文件結構
+## 專案結構
 
 ```
 game/
@@ -174,7 +174,10 @@ game/
 ├── instructions.py      # 遊戲說明
 ├── game_level.py        # 關卡系統
 ├── player.py            # 玩家角色和拳頭類別
-├── enemies.py           # 敵人類別
+├── enemies.py           # 敵人類別定義
+├── platform_system.py  # 平台碰撞系統
+├── particle_system.py  # 粒子效果系統
+├── font_manager.py      # 字體管理系統
 ├── requirements.txt     # 依賴套件
 └── README.md            # 說明文檔
 ```

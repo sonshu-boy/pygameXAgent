@@ -16,7 +16,9 @@ class Player:
         self.vel_x = 0
         self.vel_y = 0
         self.on_ground = False
+        self.double_jump_available = True  # 二段跳可用性
         self.health = 3  # 三顆愛心
+        self.platform_system = None  # 將由GameLevel設定
 
         # 狀態
         self.is_defending = False
@@ -39,6 +41,20 @@ class Player:
         self.keys = pygame.key.get_pressed()
         self.mouse_buttons = pygame.mouse.get_pressed()
 
+    def handle_event(self, event):
+        """處理單次事件（如跳躍）"""
+        if event.type == pygame.KEYDOWN:
+            if event.key in [pygame.K_w, pygame.K_UP]:
+                if self.on_ground:
+                    # 首次跳躍
+                    self.vel_y = -PLAYER_JUMP_SPEED
+                    self.on_ground = False
+                    self.double_jump_available = True
+                elif self.double_jump_available:
+                    # 二段跳
+                    self.vel_y = -PLAYER_DOUBLE_JUMP_SPEED
+                    self.double_jump_available = False
+
     def handle_input(self):
         """處理玩家輸入"""
         self.keys = pygame.key.get_pressed()
@@ -56,10 +72,7 @@ class Player:
         else:
             self.vel_x = 0
 
-        # 跳躍輸入
-        if (self.keys[pygame.K_w] or self.keys[pygame.K_UP]) and self.on_ground:
-            self.vel_y = -PLAYER_JUMP_SPEED
-            self.on_ground = False
+        # 跳躍輸入現在在 handle_event 中處理
 
         # 防禦輸入
         if self.keys[pygame.K_SPACE] and not self.is_defending:
@@ -84,6 +97,7 @@ class Player:
 
         # 攻擊輸入
         mouse_pos = pygame.mouse.get_pos()
+        is_air_attack = not self.on_ground  # 檢查是否為空中攻擊
 
         # 左鍵攻擊
         if self.mouse_buttons[0]:  # 左鍵按下
@@ -91,7 +105,7 @@ class Player:
                 self.left_fist.start_charging()
         else:  # 左鍵釋放
             if self.left_fist.charging:
-                self.left_fist.release_attack(mouse_pos)
+                self.left_fist.release_attack(mouse_pos, is_air_attack)
 
         # 右鍵攻擊
         if self.mouse_buttons[2]:  # 右鍵按下
@@ -99,7 +113,7 @@ class Player:
                 self.right_fist.start_charging()
         else:  # 右鍵釋放
             if self.right_fist.charging:
-                self.right_fist.release_attack(mouse_pos)
+                self.right_fist.release_attack(mouse_pos, is_air_attack)
 
     def update(self):
         """更新玩家狀態"""
@@ -135,11 +149,15 @@ class Player:
         self.x += self.vel_x
         self.y += self.vel_y
 
+        # 檢查平台碰撞
+        self._check_platform_collisions()
+
         # 地面碰撞檢測
         if self.y + self.height >= GROUND_Y:
             self.y = GROUND_Y - self.height
             self.vel_y = 0
             self.on_ground = True
+            self.double_jump_available = True  # 重置二段跳
 
         # 螢幕邊界限制
         self.x = max(0, min(self.x, WINDOW_WIDTH - self.width))
@@ -147,6 +165,29 @@ class Player:
         # 更新拳頭
         self.left_fist.update()
         self.right_fist.update()
+
+    def _check_platform_collisions(self):
+        """檢查與平台的碰撞"""
+        if self.platform_system is None:
+            return
+
+        player_rect = pygame.Rect(self.x, self.y, self.width, self.height)
+        platform, new_y = self.platform_system.check_collision(player_rect, self.vel_y)
+
+        if platform is not None:
+            self.y = new_y
+            self.vel_y = 0
+            self.on_ground = True
+            self.double_jump_available = True  # 重置二段跳
+        else:
+            # 檢查是否仍在平台上
+            if self.on_ground and self.vel_y >= 0:
+                # 檢查是否還在地面或平台上
+                on_platform = self.platform_system.is_on_platform(player_rect)
+                on_ground = self.y + self.height >= GROUND_Y - 5
+
+                if not on_platform and not on_ground:
+                    self.on_ground = False
 
     def take_damage(self):
         """受到傷害"""
@@ -156,6 +197,24 @@ class Player:
             self.invincible_start_time = pygame.time.get_ticks()
             return True
         return False
+
+    def check_slide_attack(self, enemies):
+        """檢查滑行攻擊碰撞"""
+        if not self.is_sliding:
+            return
+
+        player_rect = self.get_rect()
+        for enemy in enemies:
+            if enemy.alive and player_rect.colliderect(enemy.get_rect()):
+                # 滑行特殊攻擊：將敵人往上方擊飛
+                enemy.take_damage(SLIDE_ATTACK_DAMAGE, knockback=True)
+
+                # 特殊擊退效果：向上擊飛（無論是否無敵都生效）
+                enemy.vel_y = -8  # 向上速度（從-15調整為-8）
+                enemy.on_ground = False  # 確保敵人離開地面狀態，讓重力生效
+                enemy.knockback_vel_x = self.slide_direction * SLIDE_ATTACK_KNOCKBACK
+                enemy.knockback = True
+                enemy.knockback_start_time = pygame.time.get_ticks()
 
     def get_rect(self):
         """獲取碰撞矩形"""
@@ -214,6 +273,7 @@ class Fist:
         self.target_y = 0
         self.returning = False
         self.is_charged = False  # 是否為蓄力攻擊
+        self.is_air_attack = False  # 是否為空中攻擊
         self.flash_time = 0  # 閃爍計時器
 
     def start_charging(self):
@@ -222,7 +282,7 @@ class Fist:
             self.charging = True
             self.charge_start_time = pygame.time.get_ticks()
 
-    def release_attack(self, mouse_pos):
+    def release_attack(self, mouse_pos, is_air_attack=False):
         """釋放攻擊"""
         if self.charging:
             current_time = pygame.time.get_ticks()
@@ -242,20 +302,22 @@ class Fist:
                 dx /= distance
                 dy /= distance
 
-                # 限制攻擊距離
-                attack_distance = min(distance, FIST_MAX_DISTANCE)
-
-                self.target_x = player_center_x + dx * attack_distance
-                self.target_y = player_center_y + dy * attack_distance
-
                 # 檢查是否為蓄力攻擊
                 if charge_duration >= CHARGE_TIME:
                     self.is_charged = True
                     self.size = FIST_CHARGED_SIZE
+                    # 蓄力攻擊距離更遠
+                    attack_distance = min(distance, FIST_CHARGED_MAX_DISTANCE)
                 else:
                     self.is_charged = False
                     self.size = FIST_SIZE
+                    # 限制攻擊距離
+                    attack_distance = min(distance, FIST_MAX_DISTANCE)
 
+                self.target_x = player_center_x + dx * attack_distance
+                self.target_y = player_center_y + dy * attack_distance
+
+                self.is_air_attack = is_air_attack
                 self.is_attacking = True
                 self.attack_start_time = current_time
                 self.returning = False
@@ -329,9 +391,12 @@ class Fist:
             dy = self.target_y - self.y
             distance = math.sqrt(dx**2 + dy**2)
 
-            if distance > FIST_SPEED:
-                dx = (dx / distance) * FIST_SPEED
-                dy = (dy / distance) * FIST_SPEED
+            # 根據是否為蓄力攻擊選擇速度
+            fist_speed = FIST_CHARGED_SPEED if self.is_charged else FIST_SPEED
+
+            if distance > fist_speed:
+                dx = (dx / distance) * fist_speed
+                dy = (dy / distance) * fist_speed
                 self.x += dx
                 self.y += dy
             else:

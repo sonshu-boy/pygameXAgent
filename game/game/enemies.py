@@ -4,8 +4,49 @@
 
 import pygame
 import math
-import random
 from constants import *
+
+
+class Bullet:
+    """BOSS 發射的子彈"""
+
+    def __init__(self, x, y, target_x, target_y):
+        self.x = x
+        self.y = y
+        self.size = BOSS_BULLET_SIZE
+
+        # 計算朝向目標的方向
+        dx = target_x - x
+        dy = target_y - y
+        distance = math.sqrt(dx**2 + dy**2)
+
+        if distance > 0:
+            self.vel_x = (dx / distance) * BOSS_BULLET_SPEED
+            self.vel_y = (dy / distance) * BOSS_BULLET_SPEED
+        else:
+            self.vel_x = 0
+            self.vel_y = 0
+
+        self.alive = True
+
+    def update(self):
+        """更新子彈位置"""
+        self.x += self.vel_x
+        self.y += self.vel_y
+
+        # 檢查是否超出螢幕邊界
+        if self.x < 0 or self.x > WINDOW_WIDTH or self.y < 0 or self.y > WINDOW_HEIGHT:
+            self.alive = False
+
+    def get_rect(self):
+        """獲取子彈碰撞矩形"""
+        return pygame.Rect(
+            self.x - self.size // 2, self.y - self.size // 2, self.size, self.size
+        )
+
+    def draw(self, screen):
+        """繪製子彈"""
+        pygame.draw.circle(screen, RED, (int(self.x), int(self.y)), self.size // 2)
 
 
 class Enemy:
@@ -19,12 +60,24 @@ class Enemy:
         self.health = health
         self.max_health = health
         self.alive = True
+        self.platform_system = None  # 將由GameLevel設定
+
+        # 物理狀態
+        self.vel_x = 0
+        self.vel_y = 0
+        self.on_ground = False
+        self.double_jump_available = True  # 二段跳可用性
 
         # 狀態
         self.invincible = False
         self.invincible_start_time = 0
         self.stunned = False
         self.stun_start_time = 0
+
+        # 擊退狀態
+        self.knockback = False
+        self.knockback_start_time = 0
+        self.knockback_vel_x = 0
 
     def take_damage(self, damage=1, knockback=False, stun=False):
         """受到傷害"""
@@ -43,8 +96,15 @@ class Enemy:
                 self.alive = False
 
     def _apply_knockback(self):
-        """應用擊退效果（子類重寫）"""
-        pass
+        """應用擊退效果"""
+        self.knockback = True
+        self.knockback_start_time = pygame.time.get_ticks()
+        # 根據敵人位置決定擊退方向（遠離螢幕中心）
+        center_x = WINDOW_WIDTH // 2
+        if self.x < center_x:
+            self.knockback_vel_x = -KNOCKBACK_FORCE
+        else:
+            self.knockback_vel_x = KNOCKBACK_FORCE
 
     def update(self, player):
         """更新敵人狀態（子類重寫）"""
@@ -59,6 +119,97 @@ class Enemy:
         if self.stunned:
             if current_time - self.stun_start_time > STUN_DURATION:
                 self.stunned = False
+
+        # 更新擊退狀態
+        if self.knockback:
+            if current_time - self.knockback_start_time > KNOCKBACK_DURATION:
+                self.knockback = False
+                self.knockback_vel_x = 0
+            else:
+                # 應用擊退移動
+                self.x += self.knockback_vel_x * 0.1
+
+        # 應用重力（如果不在地面上）
+        if not self.on_ground:
+            self.vel_y += GRAVITY
+
+        # 更新垂直位置
+        self.y += self.vel_y
+
+        # 檢查平台碰撞
+        self._check_platform_collisions()
+
+        # 地面碰撞檢測
+        if self.y + self.height >= GROUND_Y:
+            self.y = GROUND_Y - self.height
+            self.vel_y = 0
+            self.on_ground = True
+            self.double_jump_available = True  # 重置二段跳
+
+        # 螢幕邊界限制
+        self.x = max(0, min(self.x, WINDOW_WIDTH - self.width))
+
+    def _check_platform_collisions(self):
+        """檢查與平台的碰撞"""
+        if self.platform_system is None:
+            return
+
+        enemy_rect = pygame.Rect(self.x, self.y, self.width, self.height)
+        platform, new_y = self.platform_system.check_collision(enemy_rect, self.vel_y)
+
+        if platform is not None:
+            self.y = new_y
+            self.vel_y = 0
+            self.on_ground = True
+            self.double_jump_available = True  # 重置二段跳
+        else:
+            # 檢查是否仍在平台上
+            if self.on_ground and self.vel_y >= 0:
+                # 檢查是否還在地面或平台上
+                on_platform = self.platform_system.is_on_platform(enemy_rect)
+                on_ground = self.y + self.height >= GROUND_Y - 5
+
+                if not on_platform and not on_ground:
+                    self.on_ground = False
+
+    def can_jump_to_player(self, player):
+        """判斷是否可以跳躍到玩家位置"""
+        if not self.on_ground or self.stunned or self.knockback:
+            return False
+
+        # 檢查玩家是否在上方
+        if player.y >= self.y - 50:  # 玩家不在足夠高的位置
+            return False
+
+        # 檢查水平距離是否合理
+        horizontal_distance = abs(player.x - self.x)
+        if horizontal_distance > 150:  # 距離太遠
+            return False
+
+        return True
+
+    def jump_towards_player(self, player):
+        """朝玩家方向跳躍（包含二段跳）"""
+        jump_speed = getattr(self, "jump_speed", PLAYER_JUMP_SPEED)
+        double_jump_speed = getattr(self, "double_jump_speed", PLAYER_DOUBLE_JUMP_SPEED)
+
+        if self.on_ground:
+            # 首次跳躍
+            self.vel_y = -jump_speed
+            self.on_ground = False
+            self.double_jump_available = True
+        elif self.double_jump_available and not self.stunned and not self.knockback:
+            # 二段跳
+            self.vel_y = -double_jump_speed
+            self.double_jump_available = False
+
+        # 添加水平移動朝向玩家
+        if player.x > self.x:
+            self.vel_x = min(self.vel_x + 2, 5)
+        else:
+            self.vel_x = max(self.vel_x - 2, -5)
+
+        return True
 
     def get_rect(self):
         """獲取碰撞矩形"""
@@ -80,9 +231,7 @@ class TrainingDummy(Enemy):
         """更新訓練人偶（不主動攻擊）"""
         super().update(player)
 
-        # 地面碰撞
-        if self.y + self.height < GROUND_Y:
-            self.y = GROUND_Y - self.height
+        # 訓練人偶不會主動移動或跳躍，只會被動受擊
 
     def draw(self, screen):
         """繪製訓練人偶"""
@@ -128,18 +277,33 @@ class SmallRobot(Enemy):
         self.charge_speed = SMALL_ROBOT_CHARGE_SPEED
         self.charge_cooldown = 0
         self.direction = 1  # 1 為右，-1 為左
+        self.jump_speed = SMALL_ROBOT_JUMP_SPEED
+        self.double_jump_speed = SMALL_ROBOT_DOUBLE_JUMP_SPEED
+        self.jump_cooldown = 0
 
     def update(self, player):
         """更新小型機器人"""
         super().update(player)
         current_time = pygame.time.get_ticks()
 
-        if not self.stunned:
+        if not self.stunned and not self.knockback:
             # 計算與玩家的距離
             distance_to_player = abs(self.x - player.x)
+            height_difference = self.y - player.y
+
+            # 嘗試跳躍到玩家位置（如果玩家在上方）
+            if (
+                height_difference > 50
+                and distance_to_player < 100
+                and current_time > self.jump_cooldown
+                and self.can_jump_to_player(player)
+            ):
+
+                if self.jump_towards_player(player):
+                    self.jump_cooldown = current_time + 3000  # 3秒跳躍冷卻
 
             # 如果玩家在附近且冷卻時間結束，開始衝撞
-            if distance_to_player < 200 and current_time > self.charge_cooldown:
+            elif distance_to_player < 200 and current_time > self.charge_cooldown:
                 if not self.charging:
                     self.charging = True
                     self.direction = 1 if player.x > self.x else -1
@@ -162,16 +326,17 @@ class SmallRobot(Enemy):
                     self.x = max(0, min(self.x, WINDOW_WIDTH - self.width))
 
             else:
-                # 普通移動
-                self.x += self.direction * self.speed
+                # 普通移動（加入水平速度）
+                if not self.on_ground:
+                    self.x += self.vel_x
+                    self.vel_x *= 0.95  # 空中阻力
+                else:
+                    self.x += self.direction * self.speed
+                    self.vel_x = 0
 
                 # 邊界反彈
                 if self.x <= 0 or self.x >= WINDOW_WIDTH - self.width:
                     self.direction *= -1
-
-        # 地面碰撞
-        if self.y + self.height < GROUND_Y:
-            self.y = GROUND_Y - self.height
 
     def _apply_knockback(self):
         """應用擊退效果"""
@@ -210,30 +375,64 @@ class GiantRobot(Enemy):
         self.attack_cooldown = 0
         self.special_attack_cooldown = 0
         self.attack_pattern = 0  # 攻擊模式
+        self.jump_speed = BOSS_JUMP_SPEED
+        self.double_jump_speed = BOSS_DOUBLE_JUMP_SPEED
+        self.jump_cooldown = 0
+        self.bullets = []  # 子彈列表
+        self.ranged_attack_cooldown = 0
 
     def update(self, player):
         """更新巨型機器人BOSS"""
         super().update(player)
         current_time = pygame.time.get_ticks()
 
-        if not self.stunned:
+        if not self.stunned and not self.knockback:
+            # 計算與玩家的距離和高度差
+            distance_to_player = abs(self.x - player.x)
+            height_difference = self.y - player.y
+
+            # 嘗試跳躍到玩家位置（如果玩家在上方且不太遠）
+            if (
+                height_difference > 50
+                and distance_to_player < 150
+                and current_time > self.jump_cooldown
+                and self.can_jump_to_player(player)
+            ):
+
+                if self.jump_towards_player(player):
+                    self.jump_cooldown = current_time + 4000  # 4秒跳躍冷卻
+
             # 移動朝向玩家
-            if abs(self.x - player.x) > 50:
+            elif distance_to_player > 50:
                 if player.x > self.x:
-                    self.x += self.speed
+                    move_amount = self.speed
+                    if not self.on_ground:
+                        move_amount = self.vel_x
+                    self.x += move_amount
                     self.direction = 1
                 else:
-                    self.x -= self.speed
+                    move_amount = self.speed
+                    if not self.on_ground:
+                        move_amount = self.vel_x
+                    self.x -= move_amount
                     self.direction = -1
 
-            # 普通攻擊
+            # 普通攻擊與遠程攻擊選擇
             if current_time > self.attack_cooldown:
-                distance_to_player = abs(self.x - player.x)
                 if distance_to_player < 100:
                     # 近距離攻擊
                     if self.get_rect().colliderect(player.get_rect()):
                         player.take_damage()
                         self.attack_cooldown = current_time + 1500
+                elif (
+                    distance_to_player > BOSS_RANGED_ATTACK_DISTANCE
+                    and current_time > self.ranged_attack_cooldown
+                ):
+                    # 遠程攻擊：玩家離得太遠時發射子彈
+                    self._ranged_attack(player)
+                    self.ranged_attack_cooldown = (
+                        current_time + BOSS_RANGED_ATTACK_COOLDOWN
+                    )
 
             # 特殊攻擊 - 當血量低於50%時觸發
             if (self.health / self.max_health) <= BOSS_SPECIAL_ATTACK_THRESHOLD:
@@ -241,12 +440,27 @@ class GiantRobot(Enemy):
                     self._special_attack(player)
                     self.special_attack_cooldown = current_time + 5000  # 5秒冷卻
 
-        # 地面碰撞
-        if self.y + self.height < GROUND_Y:
-            self.y = GROUND_Y - self.height
+            # 在空中時應用水平移動慣性
+            if not self.on_ground:
+                self.x += self.vel_x
+                self.vel_x *= 0.9  # 空中阻力
 
-        # 邊界限制
-        self.x = max(0, min(self.x, WINDOW_WIDTH - self.width))
+        # 更新子彈
+        for bullet in self.bullets[:]:  # 使用切片創建副本來安全地修改列表
+            bullet.update()
+            if not bullet.alive:
+                self.bullets.remove(bullet)
+
+    def _ranged_attack(self, player):
+        """遠程攻擊：發射子彈"""
+        # 從 BOSS 中心發射子彈朝向玩家
+        boss_center_x = self.x + self.width // 2
+        boss_center_y = self.y + self.height // 2
+        player_center_x = player.x + player.width // 2
+        player_center_y = player.y + player.height // 2
+
+        bullet = Bullet(boss_center_x, boss_center_y, player_center_x, player_center_y)
+        self.bullets.append(bullet)
 
     def _special_attack(self, player):
         """特殊攻擊技能 - 範圍攻擊"""
@@ -258,9 +472,15 @@ class GiantRobot(Enemy):
                 # 可以在這裡添加視覺效果表示範圍攻擊
 
     def _apply_knockback(self):
-        """BOSS受到擊退效果較小"""
-        # BOSS較重，擊退效果減弱
-        pass
+        """BOSS受到擊退效果較小但仍會有效果"""
+        self.knockback = True
+        self.knockback_start_time = pygame.time.get_ticks()
+        # BOSS的擊退力度減半
+        center_x = WINDOW_WIDTH // 2
+        if self.x < center_x:
+            self.knockback_vel_x = -KNOCKBACK_FORCE * 0.5
+        else:
+            self.knockback_vel_x = KNOCKBACK_FORCE * 0.5
 
     def take_damage(self, damage=1, knockback=False, stun=False):
         """BOSS受傷處理 - 只有蓄力攻擊才能造成傷害"""
@@ -299,6 +519,10 @@ class GiantRobot(Enemy):
 
         # 繪製血量條
         self._draw_health_bar(screen)
+
+        # 繪製子彈
+        for bullet in self.bullets:
+            bullet.draw(screen)
 
     def _draw_health_bar(self, screen):
         """繪製BOSS血量條"""

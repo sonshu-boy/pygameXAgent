@@ -6,6 +6,7 @@ import pygame
 from constants import *
 from player import Player
 from enemies import TrainingDummy, SmallRobot, GiantRobot
+from platform_system import PlatformSystem
 from font_manager import get_font
 
 
@@ -17,6 +18,10 @@ class GameLevel:
         self.enemies = []
         self.level_complete = False
         self.game_over = False
+
+        # 平台系統
+        self.platform_system = PlatformSystem()
+        self.player.platform_system = self.platform_system
 
         # UI 字體 - 使用支援中文的字體
         self.font_large = get_font("large")
@@ -32,25 +37,54 @@ class GameLevel:
             # 第一關：訓練場
             self.level_name = "第一關：訓練場"
             self.background_color = (50, 100, 50)  # 綠色
-            self.enemies.append(TrainingDummy(500, GROUND_Y - DUMMY_HEIGHT))
+
+            # 添加敵人
+            enemy = TrainingDummy(500, GROUND_Y - DUMMY_HEIGHT)
+            enemy.platform_system = self.platform_system
+            self.enemies.append(enemy)
+
+            # 添加簡單的平台
+            self.platform_system.add_platform(300, GROUND_Y - 120, 150, 20)
+            self.platform_system.add_platform(600, GROUND_Y - 160, 120, 20)
 
         elif self.level_number == LEVEL_2:
             # 第二關：工廠
             self.level_name = "第二關：工廠"
             self.background_color = (100, 100, 100)  # 灰色
+
+            # 添加敵人
             for i in range(3):
-                self.enemies.append(
-                    SmallRobot(400 + i * 150, GROUND_Y - SMALL_ROBOT_HEIGHT)
-                )
+                enemy = SmallRobot(400 + i * 150, GROUND_Y - SMALL_ROBOT_HEIGHT)
+                enemy.platform_system = self.platform_system
+                self.enemies.append(enemy)
+
+            # 添加更多平台，創造更複雜的戰鬥環境
+            self.platform_system.add_platform(200, GROUND_Y - 100, 100, 20)
+            self.platform_system.add_platform(450, GROUND_Y - 180, 120, 20)
+            self.platform_system.add_platform(700, GROUND_Y - 140, 100, 20)
+            self.platform_system.add_platform(350, GROUND_Y - 260, 80, 20)
 
         elif self.level_number == LEVEL_3:
             # 第三關：實驗室（BOSS）
             self.level_name = "第三關：實驗室 - BOSS戰"
             self.background_color = (80, 50, 100)  # 紫色
-            self.enemies.append(GiantRobot(600, GROUND_Y - BOSS_HEIGHT))
+
+            # 添加BOSS
+            boss = GiantRobot(600, GROUND_Y - BOSS_HEIGHT)
+            boss.platform_system = self.platform_system
+            self.enemies.append(boss)
+
+            # BOSS戰場地，較少但更策略性的平台
+            self.platform_system.add_platform(250, GROUND_Y - 120, 200, 25)
+            self.platform_system.add_platform(550, GROUND_Y - 200, 180, 25)
+            self.platform_system.add_platform(100, GROUND_Y - 280, 150, 25)
 
     def handle_event(self, event):
         """處理關卡事件"""
+        # 將事件傳遞給玩家
+        if self.player:
+            self.player.handle_event(event)
+
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 self.state_manager.return_to_menu()
@@ -88,6 +122,12 @@ class GameLevel:
         # 檢查拳頭攻擊敵人
         self._check_fist_collisions()
 
+        # 檢查滑行攻擊
+        self.player.check_slide_attack(self.enemies)
+
+        # 檢查 BOSS 子彈攻擊玩家
+        self._check_bullet_collisions()
+
         # 檢查關卡完成條件
         if not self.enemies:  # 所有敵人都被擊敗
             self.level_complete = True
@@ -114,6 +154,10 @@ class GameLevel:
                     knockback = False
                     stun = False  # 普通攻擊不會造成眩暈
 
+                # 空中攻擊傷害加成
+                if self.player.left_fist.is_air_attack:
+                    damage = int(damage * AIR_ATTACK_DAMAGE_MULTIPLIER)
+
                 enemy.take_damage(damage, knockback, stun)
                 self.player.left_fist.returning = True  # 拳頭立即返回
 
@@ -133,8 +177,29 @@ class GameLevel:
                     knockback = False
                     stun = False  # 普通攻擊不會造成眩暈
 
+                # 空中攻擊傷害加成
+                if self.player.right_fist.is_air_attack:
+                    damage = int(damage * AIR_ATTACK_DAMAGE_MULTIPLIER)
+
                 enemy.take_damage(damage, knockback, stun)
                 self.player.right_fist.returning = True  # 拳頭立即返回
+
+    def _check_bullet_collisions(self):
+        """檢查 BOSS 子彈與玩家的碰撞"""
+        for enemy in self.enemies:
+            if hasattr(enemy, "bullets"):  # 檢查敵人是否有子彈（主要是 BOSS）
+                for bullet in enemy.bullets[:]:
+                    if bullet.get_rect().colliderect(self.player.get_rect()):
+                        # 子彈擊中玩家
+                        if self.player.is_defending:
+                            # 玩家防禦成功，子彈被格擋
+                            pass
+                        else:
+                            # 玩家受到傷害
+                            self.player.take_damage()
+
+                        # 移除子彈
+                        enemy.bullets.remove(bullet)
 
     def draw(self, screen):
         """繪製關卡"""
@@ -145,6 +210,9 @@ class GameLevel:
         pygame.draw.rect(
             screen, BROWN, (0, GROUND_Y, WINDOW_WIDTH, WINDOW_HEIGHT - GROUND_Y)
         )
+
+        # 繪製平台
+        self.platform_system.draw(screen)
 
         # 繪製玩家
         self.player.draw(screen)

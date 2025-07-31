@@ -2,7 +2,6 @@
 遊戲狀態管理系統
 """
 
-import pygame
 from constants import *
 from menu import MainMenu
 from game_level import GameLevel
