@@ -4,7 +4,7 @@
 
 import pygame
 from constants import *
-from font_manager import get_font
+from systems.font_manager import get_font
 
 
 class MainMenu:

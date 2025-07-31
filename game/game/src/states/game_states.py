@@ -3,9 +3,9 @@
 """
 
 from constants import *
-from menu import MainMenu
-from game_level import GameLevel
-from instructions import InstructionsScreen
+from states.menu import MainMenu
+from states.game_level import GameLevel
+from states.instructions import InstructionsScreen
 
 
 class GameStateManager:

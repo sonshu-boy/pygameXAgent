@@ -4,7 +4,7 @@
 
 import pygame
 from constants import *
-from font_manager import get_font
+from systems.font_manager import get_font
 
 
 class InstructionsScreen:
@@ -21,6 +21,7 @@ class InstructionsScreen:
             "跳躍：W 鍵或上方向鍵",
             "左移：A 鍵或左方向鍵",
             "右移：D 鍵或右方向鍵",
+            "下平台：S 鍵或下方向鍵（在平台上時）",
             "",
             "攻擊：左鍵（左拳）/ 右鍵（右拳）",
             "蓄力攻擊：長按攻擊鍵可增加傷害和距離",

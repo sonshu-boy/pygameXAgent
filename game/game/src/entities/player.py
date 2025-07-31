@@ -33,9 +33,25 @@ class Player:
         self.invincible = False
         self.invincible_start_time = 0
 
+        # 新增：反擊系統
+        self.counter_attack_ready = False
+        self.counter_attack_window = 300  # 反擊窗口時間（毫秒）
+        self.counter_attack_start_time = 0
+        self.perfect_defense_bonus = False
+
+        # 新增：連擊系統
+        self.combo_count = 0
+        self.combo_timer = 0
+        self.combo_window = 2000  # 連擊窗口時間（毫秒）
+        self.max_combo = 10
+
         # 拳頭
         self.left_fist = Fist(self, "left")
         self.right_fist = Fist(self, "right")
+
+        # 下平台系統
+        self.drop_through_time = 0  # 下穿平台的計時器
+        self.drop_through_duration = 200  # 下穿平台的無效時間（毫秒）
 
         # 輸入狀態
         self.keys = pygame.key.get_pressed()
@@ -74,11 +90,31 @@ class Player:
 
         # 跳躍輸入現在在 handle_event 中處理
 
+        # 下平台輸入（S鍵或向下箭頭）
+        if self.keys[pygame.K_s] or self.keys[pygame.K_DOWN]:
+            if self.platform_system and self.platform_system.is_on_platform(
+                self.get_rect()
+            ):
+                # 確保不在地面上（只允許從平台下穿，不允許從地面下穿）
+                if self.y + self.height < GROUND_Y - 10:
+                    # 玩家在平台上且不在地面，可以下穿
+                    self.drop_through_time = current_time
+                    self.on_ground = False
+                    self.vel_y = 1  # 給一個微小的向下速度確保離開平台
+
         # 防禦輸入
         if self.keys[pygame.K_SPACE] and not self.is_defending:
             if current_time - self.defense_cooldown_start > DEFENSE_COOLDOWN:
                 self.is_defending = True
                 self.defense_start_time = current_time
+
+        # 新增：反擊輸入（按 Q 鍵或滑鼠中鍵）
+        if self.keys[pygame.K_q] or (
+            len(self.mouse_buttons) > 2 and self.mouse_buttons[2]
+        ):  # 滑鼠中鍵
+            if self.counter_attack_ready:
+                # 嘗試反擊需要傳入敵人列表，將在 game_level.py 中處理
+                pass
 
         # 蹲下/滑行輸入
         if self.keys[pygame.K_LSHIFT] or self.keys[pygame.K_RSHIFT]:
@@ -171,6 +207,12 @@ class Player:
         if self.platform_system is None:
             return
 
+        current_time = pygame.time.get_ticks()
+
+        # 檢查是否在下穿期間，如果是則忽略平台碰撞
+        if current_time - self.drop_through_time < self.drop_through_duration:
+            return
+
         player_rect = pygame.Rect(self.x, self.y, self.width, self.height)
         platform, new_y = self.platform_system.check_collision(player_rect, self.vel_y)
 
@@ -190,13 +232,77 @@ class Player:
                     self.on_ground = False
 
     def take_damage(self):
-        """受到傷害"""
-        if not self.invincible and not self.is_defending:
+        """受到傷害 - 新增反擊機制"""
+        current_time = pygame.time.get_ticks()
+
+        # 檢查是否在防禦中
+        if self.is_defending:
+            # 完美防禦：在防禦開始的前100毫秒內
+            if current_time - self.defense_start_time <= 100:
+                self.counter_attack_ready = True
+                self.counter_attack_start_time = current_time
+                self.perfect_defense_bonus = True
+                return False  # 完美防禦，無傷害
+            return False  # 普通防禦，無傷害
+
+        if not self.invincible:
             self.health -= 1
             self.invincible = True
-            self.invincible_start_time = pygame.time.get_ticks()
+            self.invincible_start_time = current_time
+
+            # 重置連擊計數
+            self.combo_count = 0
             return True
         return False
+
+    def try_counter_attack(self, enemies):
+        """嘗試執行反擊攻擊"""
+        current_time = pygame.time.get_ticks()
+
+        if (
+            self.counter_attack_ready
+            and current_time - self.counter_attack_start_time
+            <= self.counter_attack_window
+        ):
+
+            # 對附近敵人造成反擊傷害
+            player_rect = self.get_rect()
+            player_center_x = self.x + self.width // 2
+            for enemy in enemies:
+                if enemy.alive:
+                    distance = abs(enemy.x - self.x)
+                    if distance <= 120:  # 反擊範圍
+                        damage = (
+                            3 if self.perfect_defense_bonus else 2
+                        )  # 完美反擊傷害更高
+                        enemy.take_damage(
+                            damage, knockback=True, stun=True, source_x=player_center_x
+                        )
+
+            self.counter_attack_ready = False
+            self.perfect_defense_bonus = False
+            return True
+        return False
+
+    def update_combo_system(self, hit_enemy=False):
+        """更新連擊系統"""
+        current_time = pygame.time.get_ticks()
+
+        if hit_enemy:
+            self.combo_count = min(self.combo_count + 1, self.max_combo)
+            self.combo_timer = current_time
+        else:
+            # 檢查連擊是否超時
+            if current_time - self.combo_timer > self.combo_window:
+                self.combo_count = 0
+
+    def get_combo_damage_multiplier(self):
+        """獲取連擊傷害倍數"""
+        if self.combo_count >= 5:
+            return 1.5  # 5連擊以上 +50% 傷害
+        elif self.combo_count >= 3:
+            return 1.25  # 3連擊以上 +25% 傷害
+        return 1.0  # 普通傷害
 
     def check_slide_attack(self, enemies):
         """檢查滑行攻擊碰撞"""
@@ -207,7 +313,10 @@ class Player:
         for enemy in enemies:
             if enemy.alive and player_rect.colliderect(enemy.get_rect()):
                 # 滑行特殊攻擊：將敵人往上方擊飛
-                enemy.take_damage(SLIDE_ATTACK_DAMAGE, knockback=True)
+                player_center_x = self.x + self.width // 2
+                enemy.take_damage(
+                    SLIDE_ATTACK_DAMAGE, knockback=True, source_x=player_center_x
+                )
 
                 # 特殊擊退效果：向上擊飛（無論是否無敵都生效）
                 enemy.vel_y = -8  # 向上速度（從-15調整為-8）

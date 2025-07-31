@@ -7,8 +7,29 @@
 
 ```
 main.py → GameStateManager → {MenuState, GameLevel, InstructionsState}
-GameLevel → Player + Enemies + PlatformSystem + UI + effects/sound systems
+GameLevel → Player + Enemies + PlatformSystem + BulletSystem + UI + effects
 Player → Fist (left/right) + charge system + input handling + physics + platform collision
+Enemies → SmallRobot + GiantRobot + TrainingDummy (with AI + physics + platform interaction)
+```
+
+### 檔案結構（v1.4 最新）
+
+```
+game/src/
+├── main.py              # 遊戲主迴圈 + Pygame 初始化
+├── constants.py         # 統一常數配置（所有數值調整的中心）
+├── entities/            # 遊戲實體模組
+│   ├── player.py       # 玩家類 + Fist 子系統 + 蓄力攻擊
+│   └── enemies.py      # Bullet類 + Enemy基類 + 所有敵人AI
+├── states/             # 遊戲狀態管理
+│   ├── game_states.py  # 中央狀態管理器 + 關卡實例控制
+│   ├── game_level.py   # 關卡邏輯 + 碰撞檢測 + 敵人生成
+│   ├── menu.py         # 主選單界面
+│   └── instructions.py # 操作說明界面
+└── systems/            # 遊戲系統模組
+    ├── platform_system.py  # 平台物理 + 碰撞檢測
+    ├── font_manager.py     # 繁體中文字體管理
+    └── particle_system.py  # 視覺效果系統
 ```
 
 ### 核心設計原則
@@ -133,11 +154,38 @@ def apply_knockback(self, source_x):
 - 擊退方向：遠離攻擊源或螢幕中心
 - 差異化擊退：BOSS 擊退距離減半但仍會被擊退
 
-### 9. 繁體中文字體管理
+### 9. BOSS 子彈系統（v1.4 新增）
 
 ```python
-# font_manager.py - 全域字體管理
-from font_manager import get_font
+# enemies.py - 子彈物件系統
+class Bullet:
+    def __init__(self, x, y, target_x, target_y)  # 朝向目標的追蹤彈
+class GiantRobot:
+    self.bullets = []  # 子彈集合
+    def ranged_attack(self, player)  # 發射多發子彈攻擊
+```
+
+**子彈機制**：
+- 獨立的 `Bullet` 類別處理 BOSS 遠程攻擊
+- 支援散彈、連發、高頻率攻擊模式
+- 在 `game_level.py` 的 `_check_bullet_collisions()` 處理玩家碰撞
+- 玩家防禦可格擋子彈攻擊
+
+### 10. 擊退方向修正（v1.4 修復）
+
+```python
+# enemies.py - 訓練人偶擊退修正
+class TrainingDummy:
+    def apply_knockback(self, source_x):
+        # 修正：正確計算相對於攻擊源的擊退方向
+        # 確保被蓄力攻擊時向拳頭反方向擊退
+```
+
+### 11. 繁體中文字體管理
+
+```python
+# systems/font_manager.py - 全域字體管理
+from systems.font_manager import get_font
 font = get_font('large')  # 自動使用最佳中文字體
 ```
 
@@ -145,20 +193,28 @@ font = get_font('large')  # 自動使用最佳中文字體
 
 ## 開發工作流程
 
+### 遊戲啟動
+
+```bash
+# 主要啟動方式
+python game/launch_game.py
+
+# 或使用批次檔案（Windows）
+start_game_restructured.bat
+
+# 直接運行
+cd game/src && python main.py
+```
+
 ### 測試與除錯
 
 ```bash
-# 邊界處理測試（最新功能驗證）
-python test_boundary_comprehensive.py
+# 檢查項目結構和運行狀態
+cd game
+python -c "import src.main; print('項目結構正確')"
 
-# BOSS 傷害機制測試
-python test_boss_damage.py
-
-# 敵人邊界測試
-python test_enemy_boundary.py
-
-# 遊戲啟動
-python run_game.py
+# 測試字體系統
+python -c "from src.systems.font_manager import get_font; print('字體系統正常')"
 ```
 
 ### 新增關卡流程
@@ -233,12 +289,27 @@ for enemy in self.enemies:
 
 ### 最新修復指南（2025年7月）
 
-1. **敵人邊界卡住問題**：
+1. **BOSS 子彈系統升級（v1.4）**：
+   - **新增**：獨立的 `Bullet` 類別實現物件化子彈系統
+   - **功能**：支援散彈、連發、高頻率攻擊
+   - **位置**：`enemies.py` 中的 `Bullet` 類和 `GiantRobot.ranged_attack()`
+
+2. **擊退方向修正（v1.4）**：
+   - **修復**：訓練人偶被蓄力攻擊時的擊退方向錯誤
+   - **改進**：正確計算相對於攻擊源的擊退方向
+   - **位置**：`enemies.py` 中的 `TrainingDummy.apply_knockback()`
+
+3. **平台系統擴展（v1.4）**：
+   - **增強**：第三關平台數量增加，提供更豐富的戰鬥空間
+   - **影響**：改善 BOSS 戰的戰術深度
+   - **位置**：`game_level.py` 中的 `_setup_level()` 方法
+
+4. **敵人邊界卡住問題（之前版本已修復）**：
    - **問題**：小型敵人在螢幕邊緣卡住無法反彈
    - **修復**：改進衝刺邊界檢查，使用預測位置而非事後修正
    - **位置**：`enemies.py` 中的 `SmallRobot.update()` 和 `_apply_screen_boundary()`
 
-2. **BOSS 傷害機制調整**：
+5. **BOSS 傷害機制調整（之前版本已修復）**：
    - **變更**：BOSS 現在會受普通攻擊傷害（減半）但蓄力攻擊仍是主要傷害源
    - **影響**：戰鬥更流暢，保持挑戰性
    - **位置**：`enemies.py` 中的 `GiantRobot.take_damage()`
@@ -254,6 +325,8 @@ for enemy in self.enemies:
 7. **平台問題**：檢查實體的 `platform_system` 屬性是否正確設定
 8. **敵人不跳躍**：確認敵人類別有 `jump_speed` 屬性和 `_try_jump_to_player()` 方法
 9. **敵人邊界卡住**：檢查 `_apply_screen_boundary()` 覆蓋和衝刺邊界邏輯
+10. **BOSS 子彈問題**：檢查 `Bullet` 類別初始化和 `_check_bullet_collisions()` 方法
+11. **擊退方向錯誤**：確認 `apply_knockback(source_x)` 中的方向計算邏輯
 
 ### 效能監控
 

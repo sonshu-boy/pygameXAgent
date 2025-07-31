@@ -5,7 +5,7 @@
 
 import pygame
 import sys
-from game_states import GameStateManager
+from states.game_states import GameStateManager
 from constants import *
 
 

@@ -4,10 +4,10 @@
 
 import pygame
 from constants import *
-from player import Player
-from enemies import TrainingDummy, SmallRobot, GiantRobot
-from platform_system import PlatformSystem
-from font_manager import get_font
+from entities.player import Player
+from entities.enemies import TrainingDummy, SmallRobot, GiantRobot, EliteMech
+from systems.platform_system import PlatformSystem
+from systems.font_manager import get_font
 
 
 class GameLevel:
@@ -52,11 +52,17 @@ class GameLevel:
             self.level_name = "第二關：工廠"
             self.background_color = (100, 100, 100)  # 灰色
 
-            # 添加敵人
-            for i in range(3):
-                enemy = SmallRobot(400 + i * 150, GROUND_Y - SMALL_ROBOT_HEIGHT)
+            # 添加混合敵人類型
+            # 2個小機器人
+            for i in range(2):
+                enemy = SmallRobot(400 + i * 180, GROUND_Y - SMALL_ROBOT_HEIGHT)
                 enemy.platform_system = self.platform_system
                 self.enemies.append(enemy)
+
+            # 1個精英機甲兵
+            elite_enemy = EliteMech(650, GROUND_Y - 70)
+            elite_enemy.platform_system = self.platform_system
+            self.enemies.append(elite_enemy)
 
             # 添加更多平台，創造更複雜的戰鬥環境
             self.platform_system.add_platform(200, GROUND_Y - 100, 100, 20)
@@ -74,10 +80,24 @@ class GameLevel:
             boss.platform_system = self.platform_system
             self.enemies.append(boss)
 
-            # BOSS戰場地，較少但更策略性的平台
-            self.platform_system.add_platform(250, GROUND_Y - 120, 200, 25)
-            self.platform_system.add_platform(550, GROUND_Y - 200, 180, 25)
-            self.platform_system.add_platform(100, GROUND_Y - 280, 150, 25)
+            # BOSS戰場地，增加更多平台提供豐富的戰術走位選擇
+            # 左側低平台
+            self.platform_system.add_platform(50, GROUND_Y - 100, 150, 25)
+            # 中央中等高度平台
+            self.platform_system.add_platform(250, GROUND_Y - 160, 200, 25)
+            # 右側中等高度平台
+            self.platform_system.add_platform(550, GROUND_Y - 140, 180, 25)
+            # 左側高平台
+            self.platform_system.add_platform(80, GROUND_Y - 250, 140, 25)
+            # 中央高平台
+            self.platform_system.add_platform(350, GROUND_Y - 280, 160, 25)
+            # 右側高平台
+            self.platform_system.add_platform(650, GROUND_Y - 220, 150, 25)
+            # 頂部極高平台（逃生用）
+            self.platform_system.add_platform(400, GROUND_Y - 350, 120, 25)
+            # 左右兩側小跳台
+            self.platform_system.add_platform(150, GROUND_Y - 320, 80, 20)
+            self.platform_system.add_platform(780, GROUND_Y - 300, 80, 20)
 
     def handle_event(self, event):
         """處理關卡事件"""
@@ -107,6 +127,14 @@ class GameLevel:
         # 更新玩家
         self.player.update()
 
+        # 檢查反擊輸入
+        keys = pygame.key.get_pressed()
+        mouse_buttons = pygame.mouse.get_pressed()
+        if keys[pygame.K_q] or (len(mouse_buttons) > 2 and mouse_buttons[2]):
+            if self.player.try_counter_attack(self.enemies):
+                # 反擊成功，添加視覺效果
+                pass
+
         # 檢查玩家生命值
         if self.player.health <= 0:
             self.game_over = True
@@ -134,6 +162,8 @@ class GameLevel:
 
     def _check_fist_collisions(self):
         """檢查拳頭與敵人的碰撞"""
+        hit_enemy = False
+
         for enemy in self.enemies:
             if not enemy.alive:
                 continue
@@ -145,21 +175,27 @@ class GameLevel:
                 and self.player.left_fist.get_rect().colliderect(enemy.get_rect())
             ):
                 # 計算傷害和效果
-                if self.player.left_fist.is_charged:
-                    damage = CHARGE_DAMAGE_MULTIPLIER
-                    knockback = True
-                    stun = True
-                else:
-                    damage = 1
-                    knockback = False
-                    stun = False  # 普通攻擊不會造成眩暈
+                base_damage = (
+                    CHARGE_DAMAGE_MULTIPLIER if self.player.left_fist.is_charged else 1
+                )
+
+                # 應用連擊傷害倍數
+                damage_multiplier = self.player.get_combo_damage_multiplier()
+                final_damage = int(base_damage * damage_multiplier)
 
                 # 空中攻擊傷害加成
                 if self.player.left_fist.is_air_attack:
-                    damage = int(damage * AIR_ATTACK_DAMAGE_MULTIPLIER)
+                    final_damage = int(final_damage * AIR_ATTACK_DAMAGE_MULTIPLIER)
 
-                enemy.take_damage(damage, knockback, stun)
+                knockback = self.player.left_fist.is_charged
+                stun = self.player.left_fist.is_charged  # 只有蓄力攻擊造成眩暈
+
+                # 傳遞左拳位置作為攻擊源
+                enemy.take_damage(
+                    final_damage, knockback, stun, source_x=self.player.left_fist.x
+                )
                 self.player.left_fist.returning = True  # 拳頭立即返回
+                hit_enemy = True
 
             # 檢查右拳碰撞
             if (
@@ -168,21 +204,30 @@ class GameLevel:
                 and self.player.right_fist.get_rect().colliderect(enemy.get_rect())
             ):
                 # 計算傷害和效果
-                if self.player.right_fist.is_charged:
-                    damage = CHARGE_DAMAGE_MULTIPLIER
-                    knockback = True
-                    stun = True
-                else:
-                    damage = 1
-                    knockback = False
-                    stun = False  # 普通攻擊不會造成眩暈
+                base_damage = (
+                    CHARGE_DAMAGE_MULTIPLIER if self.player.right_fist.is_charged else 1
+                )
+
+                # 應用連擊傷害倍數
+                damage_multiplier = self.player.get_combo_damage_multiplier()
+                final_damage = int(base_damage * damage_multiplier)
 
                 # 空中攻擊傷害加成
                 if self.player.right_fist.is_air_attack:
-                    damage = int(damage * AIR_ATTACK_DAMAGE_MULTIPLIER)
+                    final_damage = int(final_damage * AIR_ATTACK_DAMAGE_MULTIPLIER)
 
-                enemy.take_damage(damage, knockback, stun)
+                knockback = self.player.right_fist.is_charged
+                stun = self.player.right_fist.is_charged  # 只有蓄力攻擊造成眩暈
+
+                # 傳遞右拳位置作為攻擊源
+                enemy.take_damage(
+                    final_damage, knockback, stun, source_x=self.player.right_fist.x
+                )
                 self.player.right_fist.returning = True  # 拳頭立即返回
+                hit_enemy = True
+
+        # 更新連擊系統
+        self.player.update_combo_system(hit_enemy)
 
     def _check_bullet_collisions(self):
         """檢查 BOSS 子彈與玩家的碰撞"""
@@ -193,13 +238,25 @@ class GameLevel:
                         # 子彈擊中玩家
                         if self.player.is_defending:
                             # 玩家防禦成功，子彈被格擋
-                            pass
+                            # 特殊處理：如果是雷射光束，防禦時仍會受到輕微傷害
+                            if (
+                                hasattr(bullet, "width") and bullet.width > 10
+                            ):  # 雷射光束
+                                if not self.player.invincible:
+                                    self.player.health = max(
+                                        0, self.player.health - 0.5
+                                    )  # 輕微傷害
                         else:
                             # 玩家受到傷害
                             self.player.take_damage()
 
-                        # 移除子彈
-                        enemy.bullets.remove(bullet)
+                        # 移除子彈（除了雷射光束，它會持續存在一段時間）
+                        if not (hasattr(bullet, "width") and bullet.width > 10):
+                            enemy.bullets.remove(bullet)
+
+                    # 特殊處理：導彈的追蹤更新
+                    if hasattr(bullet, "tracking") and bullet.tracking:
+                        bullet.update(self.player)  # 傳入玩家以供追蹤
 
     def draw(self, screen):
         """繪製關卡"""
@@ -252,10 +309,39 @@ class GameLevel:
                 heart_size // 2,
             )
 
+        # 連擊系統顯示
+        if self.player.combo_count > 0:
+            combo_text = self.font_medium.render(
+                f"連擊 x{self.player.combo_count}", True, YELLOW
+            )
+            screen.blit(combo_text, (10, 120))
+
+            # 連擊倍數顯示
+            multiplier = self.player.get_combo_damage_multiplier()
+            if multiplier > 1.0:
+                multiplier_text = self.font_small.render(
+                    f"傷害 +{int((multiplier-1)*100)}%", True, GREEN
+                )
+                screen.blit(multiplier_text, (10, 150))
+
+        # 反擊系統顯示
+        current_time = pygame.time.get_ticks()
+        if self.player.counter_attack_ready:
+            remaining_time = (
+                self.player.counter_attack_window
+                - (current_time - self.player.counter_attack_start_time)
+            ) / 1000
+            if remaining_time > 0:
+                counter_color = YELLOW if self.player.perfect_defense_bonus else GREEN
+                counter_text = self.font_medium.render(
+                    f"反擊就緒! {remaining_time:.1f}s", True, counter_color
+                )
+                screen.blit(counter_text, (WINDOW_WIDTH - 250, 50))
+
         # 防禦冷卻指示
         if self.player.is_defending:
             defense_text = self.font_small.render("防禦中", True, BLUE)
-            screen.blit(defense_text, (10, 100))
+            screen.blit(defense_text, (10, 180))
         elif (
             pygame.time.get_ticks() - self.player.defense_cooldown_start
             < DEFENSE_COOLDOWN
@@ -267,7 +353,7 @@ class GameLevel:
             cooldown_text = self.font_small.render(
                 f"防禦冷卻: {cooldown_remaining:.1f}s", True, GRAY
             )
-            screen.blit(cooldown_text, (10, 100))
+            screen.blit(cooldown_text, (10, 180))
 
         # 敵人數量
         enemy_count = len([e for e in self.enemies if e.alive])
@@ -279,13 +365,14 @@ class GameLevel:
             "WASD/方向鍵: 移動跳躍",
             "按住左鍵/右鍵: 蓄力攻擊",
             "空白鍵: 防禦",
+            "Q鍵/滑鼠中鍵: 反擊",
             "Shift: 蹲下/滑行",
             "ESC: 返回選單",
         ]
 
         for i, control in enumerate(controls):
             control_text = self.font_small.render(control, True, WHITE)
-            screen.blit(control_text, (10, WINDOW_HEIGHT - 120 + i * 20))
+            screen.blit(control_text, (10, WINDOW_HEIGHT - 140 + i * 20))
 
     def _draw_game_over(self, screen):
         """繪製遊戲結束畫面"""
