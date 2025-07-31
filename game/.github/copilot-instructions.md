@@ -17,7 +17,8 @@ Player → Fist (left/right) + charge system + input handling + physics + platfo
 - **組合優於繼承**：Player 包含 Fist 物件而非繼承攻擊能力
 - **常數驅動配置**：所有遊戲參數定義在 `constants.py`，支援快速調整
 - **平台系統集成**：統一的 `PlatformSystem` 處理所有實體的平台碰撞
-- **模組化擴展**：預留 `combo_system.py`、`effects.py`、`sound_manager.py` 等空模組用於未來功能
+- **依賴注入模式**：`platform_system` 通過注入傳遞給所有需要平台碰撞的實體
+- **模組化擴展**：`particle_system.py` 等模組支援視覺效果擴展
 
 ## 關鍵架構模式
 
@@ -60,19 +61,19 @@ class PlatformSystem:
 - 所有實體（玩家+敵人）都通過同一個 `PlatformSystem` 實例處理碰撞
 - 敵人 AI 會利用 `get_nearest_platform_above()` 智能跳躍追擊玩家
 
-### 4. 二段跳系統（v1.3 核心功能）
+### 4. 二段跳系統（已修復核心功能）
 
 ```python
-# player.py - 二段跳狀態機
+# player.py + enemies.py - 二段跳狀態機
 self.double_jump_available = True  # 地面重置為True
-# 首次跳躍：設定double_jump_available = True（錯誤！）
+# 首次跳躍：設定double_jump_available = True
 # 二段跳：設定double_jump_available = False
 ```
 
-**已知問題**：
-- 目前使用連續按鍵檢查導致無法正確觸發二段跳
-- 首次跳躍錯誤地重設 `double_jump_available = True`
-- 需要改為事件驅動的跳躍處理
+**重要機制**：
+- 玩家和所有敵人都支援二段跳（`SmallRobot`, `GiantRobot`）
+- 落地時重置 `double_jump_available = True`
+- 敵人 AI 會利用二段跳追擊玩家到更高平台
 
 ### 5. 蓄力攻擊系統（核心戰鬥機制）
 
@@ -89,21 +90,21 @@ self.right_fist = Fist(self, "right") # 右拳物件
 - 按住攻擊鍵觸發 `start_charging()`，釋放鍵觸發 `release_attack()`
 - 蓄力 1 秒完成，造成 2 倍傷害 + 眩暈 + 擊退
 - 視覺反饋：拳頭變大 + 顏色變化（黃 → 紅 → 閃白光）
-- BOSS 戰必須機制：BOSS 免疫普通攻擊，只受蓄力攻擊傷害
+- BOSS 戰必須機制：BOSS 對普通攻擊有傷害減免，蓄力攻擊是主要傷害來源
 
 ### 6. 滑行攻擊系統（v1.3 特殊機制）
 
 ```python
 # player.py - 滑行特殊攻擊
 def check_slide_attack(self, enemies):
-    # 當前實作：enemy.vel_y = -15（太強力）
-    # 問題：敵人飛太高且難以回到地面
+    # 當前實作：適度的向上擊飛力度
+    # 為敵人提供合理的戰術調整時間
 ```
 
-**已知問題**：
-- 滑行攻擊的向上擊飛力度（`vel_y = -15`）太強
-- 敵人被擊飛後不容易回到地面繼續戰鬥
-- 需要調整為較小的向上速度（建議 `-8` 到 `-10`）
+**機制特色**：
+- 滑行攻擊會給敵人適度的向上擊飛力度
+- 敵人被擊飛後能夠回到地面繼續戰鬥
+- 玩家可以利用滑行攻擊創造戰術空間
 
 ### 7. 敵人 AI 跳躍系統（v1.2 新增）
 
@@ -147,14 +148,14 @@ font = get_font('large')  # 自動使用最佳中文字體
 ### 測試與除錯
 
 ```bash
-# v1.3 功能測試（含二段跳、滑行攻擊）
-python test_update_v3.py
+# 邊界處理測試（最新功能驗證）
+python test_boundary_comprehensive.py
 
-# 組件測試
-python test_game.py
+# BOSS 傷害機制測試
+python test_boss_damage.py
 
-# 新功能測試（v1.2 平台系統與敵人跳躍）
-python test_update_features.py
+# 敵人邊界測試
+python test_enemy_boundary.py
 
 # 遊戲啟動
 python run_game.py
@@ -230,28 +231,29 @@ for enemy in self.enemies:
 
 ## 調試技巧
 
-### v1.3 已知問題和修復指南
+### 最新修復指南（2025年7月）
 
-1. **二段跳無法觸發**：
-   - **問題**：使用連續按鍵檢查 `self.keys[pygame.K_w]`
-   - **修復**：改為在 `handle_event()` 中處理 `pygame.KEYDOWN` 事件
-   - **位置**：`player.py` 第 62-71 行的跳躍邏輯
+1. **敵人邊界卡住問題**：
+   - **問題**：小型敵人在螢幕邊緣卡住無法反彈
+   - **修復**：改進衝刺邊界檢查，使用預測位置而非事後修正
+   - **位置**：`enemies.py` 中的 `SmallRobot.update()` 和 `_apply_screen_boundary()`
 
-2. **滑行攻擊擊飛過強**：
-   - **問題**：`enemy.vel_y = -15` 讓敵人飛太高
-   - **修復**：調整為 `enemy.vel_y = -8` 讓敵人小幅上升
-   - **位置**：`player.py` 第 207 行的 `check_slide_attack()`
+2. **BOSS 傷害機制調整**：
+   - **變更**：BOSS 現在會受普通攻擊傷害（減半）但蓄力攻擊仍是主要傷害源
+   - **影響**：戰鬥更流暢，保持挑戰性
+   - **位置**：`enemies.py` 中的 `GiantRobot.take_damage()`
 
 ### 常見問題排查
 
 1. **拳頭不攻擊**：檢查 `Fist.start_attack()` 是否正確設定目標位置
 2. **蓄力攻擊無效**：確認 `start_charging()` 和 `release_attack()` 配對調用
 3. **敵人無反應**：確認 `Enemy.update()` 中的 AI 邏輯和狀態檢查
-4. **BOSS 戰異常**：BOSS 只受蓄力攻擊傷害，檢查 `is_charged` 參數傳遞
+4. **BOSS 戰異常**：BOSS 對普通攻擊有傷害減免，檢查 `is_charged` 參數傳遞
 5. **字體顯示問題**：運行 `test_fonts.py` 檢查字體路徑
 6. **狀態切換卡住**：檢查 `GameStateManager` 中的狀態字典是否正確更新
 7. **平台問題**：檢查實體的 `platform_system` 屬性是否正確設定
 8. **敵人不跳躍**：確認敵人類別有 `jump_speed` 屬性和 `_try_jump_to_player()` 方法
+9. **敵人邊界卡住**：檢查 `_apply_screen_boundary()` 覆蓋和衝刺邊界邏輯
 
 ### 效能監控
 
@@ -267,7 +269,7 @@ for enemy in self.enemies:
 
 1. 在 `constants.py` 定義相關常數
 2. 在對應模組添加核心邏輯
-3. 在 `test_update_v3.py` 添加測試案例
+3. 在 `test_boundary_comprehensive.py` 或相關測試文件添加測試案例
 4. 更新 UI 顯示（如果需要）
 
 ### 保持架構一致性

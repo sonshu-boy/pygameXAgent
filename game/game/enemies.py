@@ -126,8 +126,11 @@ class Enemy:
                 self.knockback = False
                 self.knockback_vel_x = 0
             else:
-                # 應用擊退移動
+                # 應用擊退移動並檢查邊界
+                old_x = self.x
                 self.x += self.knockback_vel_x * 0.1
+                # 確保不超出邊界
+                self.x = max(0, min(self.x, WINDOW_WIDTH - self.width))
 
         # 應用重力（如果不在地面上）
         if not self.on_ground:
@@ -146,7 +149,11 @@ class Enemy:
             self.on_ground = True
             self.double_jump_available = True  # 重置二段跳
 
-        # 螢幕邊界限制
+        # 螢幕邊界限制（子類可以覆蓋）
+        self._apply_screen_boundary()
+
+    def _apply_screen_boundary(self):
+        """應用螢幕邊界限制（子類可以覆蓋此方法）"""
         self.x = max(0, min(self.x, WINDOW_WIDTH - self.width))
 
     def _check_platform_collisions(self):
@@ -283,9 +290,9 @@ class SmallRobot(Enemy):
 
     def update(self, player):
         """更新小型機器人"""
-        super().update(player)
         current_time = pygame.time.get_ticks()
 
+        # 在更新物理狀態之前先處理AI行為
         if not self.stunned and not self.knockback:
             # 計算與玩家的距離
             distance_to_player = abs(self.x - player.x)
@@ -310,7 +317,19 @@ class SmallRobot(Enemy):
 
             # 執行衝撞
             if self.charging:
-                self.x += self.direction * self.charge_speed
+                # 預計移動位置
+                new_x = self.x + self.direction * self.charge_speed
+
+                # 檢查邊界，如果會超出螢幕則停止衝刺並反彈
+                if new_x <= 0 or new_x >= WINDOW_WIDTH - self.width:
+                    self.charging = False
+                    self.charge_cooldown = current_time + 2000  # 2秒冷卻
+                    self.direction *= -1  # 反轉方向
+                    # 確保不超出邊界
+                    self.x = max(0, min(self.x, WINDOW_WIDTH - self.width))
+                else:
+                    # 安全移動
+                    self.x = new_x
 
                 # 檢查是否衝撞到玩家
                 if self.get_rect().colliderect(player.get_rect()):
@@ -318,30 +337,51 @@ class SmallRobot(Enemy):
                     self.charging = False
                     self.charge_cooldown = current_time + 2000  # 2秒冷卻
 
-                # 檢查是否衝出螢幕或撞牆
-                if self.x < -50 or self.x > WINDOW_WIDTH + 50:
-                    self.charging = False
-                    self.charge_cooldown = current_time + 2000
-                    # 重新定位到螢幕內
-                    self.x = max(0, min(self.x, WINDOW_WIDTH - self.width))
-
             else:
                 # 普通移動（加入水平速度）
                 if not self.on_ground:
-                    self.x += self.vel_x
+                    # 空中移動
+                    new_x = self.x + self.vel_x
+                    # 邊界檢查
+                    if new_x <= 0:
+                        self.x = 0
+                        self.vel_x = 0
+                        self.direction = 1  # 設定向右移動
+                    elif new_x >= WINDOW_WIDTH - self.width:
+                        self.x = WINDOW_WIDTH - self.width
+                        self.vel_x = 0
+                        self.direction = -1  # 設定向左移動
+                    else:
+                        self.x = new_x
                     self.vel_x *= 0.95  # 空中阻力
                 else:
-                    self.x += self.direction * self.speed
+                    # 地面移動
+                    new_x = self.x + self.direction * self.speed
+                    # 邊界檢查和反彈
+                    if new_x <= 0:
+                        self.x = 0
+                        self.direction = 1  # 反轉方向向右
+                    elif new_x >= WINDOW_WIDTH - self.width:
+                        self.x = WINDOW_WIDTH - self.width
+                        self.direction = -1  # 反轉方向向左
+                    else:
+                        self.x = new_x
                     self.vel_x = 0
 
-                # 邊界反彈
-                if self.x <= 0 or self.x >= WINDOW_WIDTH - self.width:
-                    self.direction *= -1
+        # 調用父類更新方法（處理物理、狀態等）
+        super().update(player)
+
+    def _apply_screen_boundary(self):
+        """SmallRobot 使用自定義的邊界處理，不使用父類的強制限制"""
+        # 不執行任何操作，讓自定義的邊界處理邏輯生效
+        pass
 
     def _apply_knockback(self):
         """應用擊退效果"""
         self.charging = False  # 停止衝撞
         self.charge_cooldown = pygame.time.get_ticks() + 1500
+        # 調用父類的擊退方法
+        super()._apply_knockback()
 
     def draw(self, screen):
         """繪製小型機器人"""
@@ -483,10 +523,16 @@ class GiantRobot(Enemy):
             self.knockback_vel_x = KNOCKBACK_FORCE * 0.5
 
     def take_damage(self, damage=1, knockback=False, stun=False):
-        """BOSS受傷處理 - 只有蓄力攻擊才能造成傷害"""
-        # BOSS只會受到蓄力攻擊的傷害
-        if damage >= CHARGE_DAMAGE_MULTIPLIER and not self.invincible and self.alive:
-            self.health -= damage
+        """BOSS受傷處理 - 現在普通攻擊也能造成傷害"""
+        # BOSS現在接受所有攻擊，但對普通攻擊有傷害減免
+        if not self.invincible and self.alive:
+            # 如果是普通攻擊（傷害值為1），減少傷害值但仍然有效
+            if damage < CHARGE_DAMAGE_MULTIPLIER:
+                actual_damage = max(1, damage // 2)  # 普通攻擊傷害減半但至少為1
+            else:
+                actual_damage = damage  # 蓄力攻擊保持原有傷害
+
+            self.health -= actual_damage
             self.invincible = True
             self.invincible_start_time = pygame.time.get_ticks()
 
