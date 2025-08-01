@@ -11,12 +11,12 @@
     2.5
   ],
   "player_stats": {
-    "total_playtime": 180000,
-    "total_enemies_defeated": 25,
+    "total_playtime": 0,
+    "total_enemies_defeated": 6,
     "best_times": {
-      "1": 12.4,
-      "2": 25.798,
-      "2.5": 13.917
+      "1": 9.389,
+      "2": 21.022,
+      "2.5": 8.782
     }
   }
 }

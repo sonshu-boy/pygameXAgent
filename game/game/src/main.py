@@ -30,10 +30,16 @@ class Game:
         self.clock = pygame.time.Clock()
         self.state_manager = GameStateManager()
 
-        # 初始化音效管理器
+        # 初始化音效管理器並開始播放背景音樂
         from systems.sound_manager import sound_manager
 
         self.sound_manager = sound_manager
+
+        # 確保音效系統已載入
+        self.sound_manager.ensure_loaded()
+
+        # 開始播放背景音樂
+        self.sound_manager.play_background_music()
 
     def run(self):
         """主遊戲迴圈"""

@@ -13,6 +13,7 @@ from systems.platform_system import PlatformSystem
 from systems.font_manager import get_font
 from systems.save_system import save_system
 from systems.particle_system import particle_system
+from systems.sound_manager import sound_manager
 
 
 class GameLevel:
@@ -23,6 +24,7 @@ class GameLevel:
         self.enemies = []
         self.level_complete = False
         self.game_over = False
+        self.death_sound_played = False  # 防止死亡音效重複播放
 
         # 計時系統
         self.start_time = pygame.time.get_ticks()
@@ -168,6 +170,8 @@ class GameLevel:
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
+                # 返回主選單時恢復背景音樂音量
+                sound_manager.restore_bgm_volume()
                 self.state_manager.return_to_menu()
             elif event.key == pygame.K_q:
                 # 處理Q鍵：反擊或清屏技能
@@ -199,10 +203,12 @@ class GameLevel:
                 elif self.level_number < LEVEL_3:
                     self.state_manager.start_level(self.level_number + 1)
                 else:
-                    # 遊戲完成，返回關卡選擇
+                    # 遊戲完成，返回關卡選擇時恢復背景音樂音量
+                    sound_manager.restore_bgm_volume()
                     self.state_manager.change_state(LEVEL_SELECT_STATE)
             elif event.key == pygame.K_TAB and self.level_complete:
-                # 返回關卡選擇
+                # 返回關卡選擇時恢復背景音樂音量
+                sound_manager.restore_bgm_volume()
                 self.state_manager.change_state(LEVEL_SELECT_STATE)
 
     def update(self):
@@ -226,7 +232,17 @@ class GameLevel:
 
         # 檢查玩家生命值
         if self.player.health <= 0:
-            self.game_over = True
+            if not self.game_over:  # 只在第一次死亡時觸發
+                self.game_over = True
+                # 播放玩家死亡音效
+                if not self.death_sound_played:
+                    try:
+                        from systems.sound_manager import sound_manager
+
+                        sound_manager.play_death_sound()
+                        self.death_sound_played = True
+                    except ImportError:
+                        pass
             return
 
         # 更新敵人

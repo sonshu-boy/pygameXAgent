@@ -7,6 +7,7 @@ import math
 from constants import *
 from systems.font_manager import get_font
 from systems.save_system import save_system
+from systems.sound_manager import sound_manager
 
 
 class LevelSelectScreen:
@@ -64,6 +65,8 @@ class LevelSelectScreen:
             elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
                 self._select_level()
             elif event.key == pygame.K_ESCAPE:
+                # 返回主選單時恢復背景音樂音量
+                sound_manager.restore_bgm_volume()
                 self.state_manager.change_state(MENU_STATE)
             elif event.key == pygame.K_F1:
                 # 重置存檔（隱藏功能）

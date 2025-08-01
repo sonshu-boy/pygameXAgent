@@ -291,6 +291,14 @@ class Player:
             self.invincible = True
             self.invincible_start_time = current_time
 
+            # 播放玩家受傷音效
+            try:
+                from systems.sound_manager import sound_manager
+
+                sound_manager.play_player_hurt_sound()
+            except ImportError:
+                pass
+
             # 重置連擊計數
             self.combo_count = 0
             return True

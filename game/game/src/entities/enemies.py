@@ -268,6 +268,7 @@ class Enemy:
         self.health = health
         self.max_health = health
         self.alive = True
+        self.death_sound_played = False  # 防止死亡音效重複播放
         self.platform_system = None  # 將由GameLevel設定
 
         # 物理狀態
@@ -302,6 +303,23 @@ class Enemy:
 
             if self.health <= 0:
                 self.alive = False
+                # 播放死亡音效（僅播放一次）
+                if not self.death_sound_played:
+                    try:
+                        from systems.sound_manager import sound_manager
+
+                        sound_manager.play_death_sound()
+                        self.death_sound_played = True
+                    except ImportError:
+                        pass
+            else:
+                # 敵人受傷但未死亡，播放受傷音效
+                try:
+                    from systems.sound_manager import sound_manager
+
+                    sound_manager.play_enemy_hurt_sound()
+                except ImportError:
+                    pass
 
     def apply_knockback(self, source_x=None):
         """應用擊退效果"""
@@ -1404,6 +1422,23 @@ class GiantRobot(Enemy):
 
             if self.health <= 0:
                 self.alive = False
+                # 播放死亡音效（僅播放一次）
+                if not self.death_sound_played:
+                    try:
+                        from systems.sound_manager import sound_manager
+
+                        sound_manager.play_death_sound()
+                        self.death_sound_played = True
+                    except ImportError:
+                        pass
+            else:
+                # BOSS 受傷但未死亡，播放受傷音效
+                try:
+                    from systems.sound_manager import sound_manager
+
+                    sound_manager.play_enemy_hurt_sound()
+                except ImportError:
+                    pass
 
     def draw(self, screen):
         """繪製巨型機器人BOSS"""

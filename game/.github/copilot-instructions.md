@@ -9,7 +9,7 @@
 ```
 main.py → GameStateManager → {MenuState, GameLevel, InstructionsState, LevelSelectState}
 GameLevel → Player + Enemies + PlatformSystem + UI + ParticleSystem + SaveSystem + SoundSystem
-Player → Fist (left/right) + charge system + clear screen skill + counter attack + input handling + physics
+Player → Fist (left/right) + charge system + input handling + physics
 Enemies → SmallRobot + GiantRobot + TrainingDummy + MageRobot + EliteMech (AI + bullets + platform interaction)
 ```
 
@@ -26,26 +26,28 @@ game/
 │   └── sounds/         # 音效資源
 │       ├── damage4.mp3     # 普通攻擊音效
 │       ├── damage6.mp3     # 蓄力攻擊音效
-│       └── striking.mp3    # 清屏技能音效
-└── src/                # 原始程式碼
-    ├── main.py              # 遊戲主迴圈 + Pygame 初始化 + 音效系統初始化
-    ├── constants.py         # 統一常數配置（所有數值調整的中心）
-    ├── entities/            # 遊戲實體模組
-    │   ├── player.py       # 玩家類 + Fist 子系統 + 蓄力攻擊 + 清屏技能 + 反擊系統
-    │   ├── enemies.py      # Bullet類 + Enemy基類 + 所有敵人AI + 法師追蹤子彈
-    │   └── items.py        # 血量道具系統 + 拾取特效
-    ├── states/             # 遊戲狀態管理
-    │   ├── game_states.py  # 中央狀態管理器 + 關卡實例控制
-    │   ├── game_level.py   # 關卡邏輯 + 碰撞檢測 + 敵人生成 + 特效整合 + Q鍵處理
-    │   ├── menu.py         # 主選單界面
-    │   ├── instructions.py # 操作說明界面
-    │   └── level_select.py # 關卡選擇界面 + 進度保存
-    └── systems/            # 遊戲系統模組
-        ├── platform_system.py  # 平台物理 + 碰撞檢測
-        ├── font_manager.py     # 繁體中文字體管理
-        ├── particle_system.py  # 完整粒子特效系統
-        ├── sound_manager.py    # 音效管理系統（單例模式）
-        └── save_system.py      # 遊戲進度保存系統
+│       └── y2mate.gg - Chess Type Beat Slowed.mp3  # 背景音樂
+└── game/               # 主遊戲目錄（注意：實際路徑是 game/game/）
+    ├── src/            # 原始程式碼
+    │   ├── main.py              # 遊戲主迴圈 + Pygame 初始化 + 音效系統初始化
+    │   ├── constants.py         # 統一常數配置（所有數值調整的中心）
+    │   ├── entities/            # 遊戲實體模組
+    │   │   ├── player.py       # 玩家類 + Fist 子系統 + 蓄力攻擊 + 滑行攻擊
+    │   │   ├── enemies.py      # Bullet類 + Enemy基類 + 所有敵人AI + 法師追蹤子彈
+    │   │   └── items.py        # 血量道具系統 + 拾取特效
+    │   ├── states/             # 遊戲狀態管理
+    │   │   ├── game_states.py  # 中央狀態管理器 + 關卡實例控制 + 音效整合
+    │   │   ├── game_level.py   # 關卡邏輯 + 碰撞檢測 + 敵人生成 + 特效整合
+    │   │   ├── menu.py         # 主選單界面
+    │   │   ├── instructions.py # 操作說明界面
+    │   │   └── level_select.py # 關卡選擇界面 + 進度保存
+    │   └── systems/            # 遊戲系統模組
+    │       ├── platform_system.py  # 平台物理 + 碰撞檢測
+    │       ├── font_manager.py     # 繁體中文字體管理
+    │       ├── particle_system.py  # 完整粒子特效系統
+    │       ├── sound_manager.py    # 音效管理系統（單例模式）+ 背景音樂
+    │       └── save_system.py      # 遊戲進度保存系統
+    └── game_save.json          # 關卡進度存檔
 ```
 
 ### 核心設計原則
@@ -78,22 +80,13 @@ class GameStateManager:
 # player.py - 混合輸入模式
 def handle_input(self):          # 連續狀態檢查（移動、攻擊）
 def handle_event(self, event):   # 單次按鍵事件（跳躍、防禦）
-
-# game_level.py - Q鍵特殊處理
-def handle_event(self, event):
-    if event.key == pygame.K_q:
-        # 處理Q鍵：反擊或清屏技能
-        if self.player.counter_attack_ready:
-            self.player.try_counter_attack(self.enemies)
-        elif self.player.clear_screen_available:
-            self.player.activate_clear_screen_skill()
 ```
 
 **重要設計決策**：
 - **移動**使用 `pygame.key.get_pressed()` 實現流暢連續移動
 - **跳躍**應使用 `pygame.KEYDOWN` 事件防止連續觸發
 - **攻擊**使用連續檢查實現按住蓄力機制
-- **Q鍵**在 `game_level.py` 處理，支援反擊和清屏技能切換
+- **防禦**使用 SPACE 鍵（事件處理）實現防禦機制
 
 ### 3. 平台系統（核心功能）
 
@@ -127,50 +120,28 @@ self.right_fist = Fist(self, "right") # 右拳物件
 - 視覺反饋：拳頭變大 + 顏色變化（黃 → 紅 → 閃白光）
 - BOSS 戰必須機制：BOSS 對普通攻擊有傷害減免，蓄力攻擊是主要傷害來源
 
-### 5. 清屏技能系統（特殊機制）
+### 5. 防禦與戰鬥系統（實際實現）
 
 ```python
-# player.py - 清屏技能系統
-self.clear_screen_cooldown_start = 0
-self.clear_screen_available = True
+# player.py - 防禦系統
+self.is_defending = False
+self.defense_start_time = 0
+self.defense_cooldown_start = 0
 
-def activate_clear_screen_skill(self):
-    # 檢查冷卻狀態
-    # 返回技能是否成功激活
-
-# game_level.py - 清屏技能執行
-def _execute_clear_screen_skill(self):
-    # 清除範圍內所有敵人子彈
-    # 擊退範圍內所有敵人
-    # 觸發粒子特效和音效
+def handle_input(self):
+    # 防禦輸入處理
+    if self.keys[pygame.K_SPACE]:
+        if not self.is_defending and current_time - self.defense_cooldown_start > DEFENSE_COOLDOWN:
+            self.is_defending = True
+            self.defense_start_time = current_time
 ```
 
-**機制特色**：
-- 按 Q 鍵觸發（當反擊不可用時），清除半徑 300 像素內的所有敵人子彈
-- 10 秒冷卻時間，螢幕右上角顯示冷卻狀態
-- 整合粒子特效系統，從玩家位置向外擴散多層衝擊波特效
-- 包含音效反饋（`striking.mp3`）
+**防禦機制特色**：
+- SPACE 鍵觸發防禦，具有冷卻時間限制
+- 防禦時可減免傷害並提供無敵幀
+- 滑行攻擊：結合 Shift + 移動實現特殊攻擊
 
-### 6. 反擊系統（v1.6 新機制）
-
-```python
-# player.py - 反擊系統
-self.counter_attack_ready = False
-self.counter_attack_window = 300  # 反擊窗口時間
-self.perfect_defense_bonus = False
-
-def try_counter_attack(self, enemies):
-    # 檢查反擊條件
-    # 對範圍內敵人造成反擊傷害
-    # 觸發防禦特效
-```
-
-**反擊機制**：
-- Q 鍵優先觸發反擊（當 `counter_attack_ready = True` 時）
-- 完美防禦窗口內觸發，造成額外傷害
-- 整合視覺特效增強反饋
-
-### 7. 粒子特效系統（v1.5 核心系統）
+### 6. 粒子特效系統（v1.5 核心系統）
 
 ```python
 # systems/particle_system.py - 完整特效系統
@@ -182,17 +153,15 @@ particle_system.create_combo_effect(x, y, combo_count)
 particle_system.create_damage_text(x, y, damage, is_critical=True)
 particle_system.create_heal_effect(x, y, heal_amount)
 particle_system.create_defense_effect(x, y)
-particle_system.create_clear_screen_effect(x, y)  # 多層衝擊波特效
 ```
 
 **特效系統特點**：
-- **多種特效類型**：攻擊爆炸、連擊光環、傷害數字、治療粒子、防禦光環、清屏擴散
-- **清屏特效增強**：三階段光環 + 多向粒子擴散 + 能量聚集爆發
+- **多種特效類型**：攻擊爆炸、連擊光環、傷害數字、治療粒子、防禦光環
 - **分層渲染**：光環（背景）→ 粒子（中間）→ 文字（前景）
 - **性能優化**：自動清理過期特效，支援最大數量限制
 - **物理模擬**：粒子受重力影響，透明度漸變效果
 
-### 8. 音效系統（v1.6 新增核心系統）
+### 7. 音效系統（v1.6 新增核心系統）
 
 ```python
 # systems/sound_manager.py - 單例音效管理器
@@ -200,9 +169,9 @@ from systems.sound_manager import sound_manager
 
 # 在戰鬥邏輯中播放音效
 sound_manager.play_hit_sound(is_charged=True)   # 根據攻擊類型播放音效
-sound_manager.play_clear_screen_sound()         # 清屏技能音效
 sound_manager.set_volume(0.7)                   # 調整音量
 sound_manager.set_enabled(False)                # 禁用音效
+sound_manager.play_background_music()           # 播放背景音樂
 ```
 
 **音效系統特點**：
@@ -210,9 +179,10 @@ sound_manager.set_enabled(False)                # 禁用音效
 - **延遲載入**：音效檔案在首次播放時才載入
 - **錯誤處理**：檔案不存在或播放失敗時不會崩潰
 - **路徑自動檢測**：自動計算相對於 `assets/sounds/` 的路徑
-- **音效分類**：普通攻擊、蓄力攻擊、清屏技能三種主要音效
+- **音效分類**：普通攻擊、蓄力攻擊兩種主要音效
+- **背景音樂**：支援自動播放和音量控制
 
-### 9. 敵人 AI 跳躍系統
+### 8. 敵人 AI 跳躍系統
 
 ```python
 # enemies.py - 智能跳躍追擊
@@ -230,7 +200,7 @@ class MageRobot(Enemy):
 - 空中移動：跳躍時可調整水平方向追擊玩家
 - 法師機器人特有：瞬移技能（8 秒冷卻）和追蹤子彈攻擊
 
-### 10. 進度保存系統
+### 9. 進度保存系統
 
 ```python
 # systems/save_system.py - 全域保存實例
@@ -249,20 +219,20 @@ save_system.is_level_unlocked(level_number)
 ### 遊戲啟動
 
 ```bash
-# 主要啟動方式
+# 主要啟動方式（從 game/ 根目錄）
 python launch_game.py
 
-# 或使用批次檔案（Windows）
-start_game_restructured.bat
+# 直接運行（從 game/game/src 目錄）
+cd game/src && python main.py
 
-# 直接運行
-cd src && python main.py
+# Windows PowerShell 啟動
+cd game\game\src; python main.py
 ```
 
 ### 開發與除錯
 
 ```bash
-# 檢查項目結構和運行狀態
+# 檢查項目結構和運行狀態（從 game/game/ 目錄）
 python -c "import src.main; print('項目結構正確')"
 
 # 測試字體系統
@@ -271,7 +241,7 @@ python -c "from src.systems.font_manager import get_font; print('字體系統正
 # 測試粒子系統
 python -c "from src.systems.particle_system import particle_system; print('粒子系統正常')"
 
-# 測試音效系統
+# 測試音效系統（重要：確認音效和背景音樂）
 python -c "from src.systems.sound_manager import sound_manager; print('音效系統正常'); print(f'可用音效: {sound_manager.get_available_sounds()}')"
 ```
 
@@ -350,8 +320,10 @@ from systems.sound_manager import sound_manager
 # 戰鬥音效
 sound_manager.play_hit_sound(is_charged=True)  # 蓄力攻擊音效
 
-# 技能音效
-sound_manager.play_clear_screen_sound()        # 清屏技能音效
+# 背景音樂控制
+sound_manager.play_background_music()          # 播放背景音樂
+sound_manager.reduce_bgm_volume_for_gameplay() # 遊戲中降低音量
+sound_manager.restore_bgm_volume()             # 恢復原音量
 
 # 錯誤處理
 try:
@@ -365,24 +337,22 @@ except:
 ### 核心系統問題
 1. **拳頭不攻擊**：檢查 `Fist.start_attack()` 是否正確設定目標位置
 2. **蓄力攻擊無效**：確認 `start_charging()` 和 `release_attack()` 配對調用
-3. **清屏技能無效**：檢查冷卻時間和 `particle_system` 導入
-4. **Q鍵無反應**：確認在 `game_level.py` 的 `handle_event()` 中處理
-5. **敵人無反應**：確認 `Enemy.update()` 中的 AI 邏輯和狀態檢查
-6. **BOSS 戰異常**：BOSS 對普通攻擊有傷害減免，檢查 `is_charged` 參數傳遞
+3. **敵人無反應**：確認 `Enemy.update()` 中的 AI 邏輯和狀態檢查
+4. **BOSS 戰異常**：BOSS 對普通攻擊有傷害減免，檢查 `is_charged` 參數傳遞
 
 ### 系統整合問題
-7. **字體顯示問題**：檢查 `font_manager.py` 中的字體路徑
-8. **狀態切換卡住**：檢查 `GameStateManager` 中的狀態字典是否正確更新
-9. **平台問題**：檢查實體的 `platform_system` 屬性是否正確設定
-10. **粒子特效問題**：檢查 `particle_system.py` 導入和 `update()/draw()` 調用
-11. **音效問題**：檢查 `sound_manager.py` 檔案路徑和 `pygame.mixer` 初始化
-12. **存檔問題**：檢查 `save_system.py` 的 JSON 檔案讀寫權限
+5. **字體顯示問題**：檢查 `font_manager.py` 中的字體路徑
+6. **狀態切換卡住**：檢查 `GameStateManager` 中的狀態字典是否正確更新
+7. **平台問題**：檢查實體的 `platform_system` 屬性是否正確設定
+8. **粒子特效問題**：檢查 `particle_system.py` 導入和 `update()/draw()` 調用
+9. **音效問題**：檢查 `sound_manager.py` 檔案路徑和 `pygame.mixer` 初始化
+10. **存檔問題**：檢查 `save_system.py` 的 JSON 檔案讀寫權限
 
 ### 新增問題（v1.6）
-13. **音效不播放**：確認 `assets/sounds/` 路徑和檔案存在性
-14. **音效系統崩潰**：檢查 `pygame.mixer.init()` 在 `main.py` 中的初始化
-15. **法師追蹤子彈問題**：檢查 `MageRobot` 的子彈生成和碰撞檢測
-16. **反擊系統無效**：確認 `counter_attack_ready` 狀態和 Q 鍵處理順序
+11. **音效不播放**：確認 `assets/sounds/` 路徑和檔案存在性
+12. **音效系統崩潰**：檢查 `pygame.mixer.init()` 在 `main.py` 中的初始化
+13. **法師追蹤子彈問題**：檢查 `MageRobot` 的子彈生成和碰撞檢測
+14. **背景音樂問題**：確認 `y2mate.gg - Chess Type Beat Slowed.mp3` 檔案存在
 
 ### 效能監控
 遊戲設計為 60 FPS，如果出現卡頓：
@@ -418,6 +388,12 @@ except:
 3. 在 `SoundManager` 類別中添加專用播放方法
 4. 在遊戲邏輯中呼叫新的音效方法
 ```
+
+### 重要架構提醒
+- **項目結構**：主要代碼位於 `game/game/src/` 目錄中，而非 `game/src/`
+- **音效路徑**：從 `src/systems/` 到 `assets/sounds/` 的相對路徑是 `../../../assets/sounds/`
+- **單例模式**：所有系統管理器（sound_manager, particle_system, save_system）都使用單例模式
+- **依賴注入**：platform_system 通過依賴注入傳遞給所有需要碰撞檢測的實體
 
 `````
 

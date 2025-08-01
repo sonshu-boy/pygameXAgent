@@ -7,6 +7,7 @@ from states.menu import MainMenu
 from states.game_level import GameLevel
 from states.instructions import InstructionsScreen
 from states.level_select import LevelSelectScreen
+from systems.sound_manager import sound_manager
 
 
 class GameStateManager:
@@ -25,12 +26,18 @@ class GameStateManager:
 
     def start_level(self, level_number):
         """開始指定關卡"""
+        # 降低背景音樂音量以便聽到遊戲音效
+        sound_manager.reduce_bgm_volume_for_gameplay()
+
         self.current_level = GameLevel(self, level_number)
         self.states[GAME_STATE] = self.current_level
         self.change_state(GAME_STATE)
 
     def return_to_menu(self):
         """返回主選單"""
+        # 恢復背景音樂的原始音量
+        sound_manager.restore_bgm_volume()
+
         self.current_level = None
         if GAME_STATE in self.states:
             del self.states[GAME_STATE]
