@@ -8,6 +8,7 @@ from entities.player import Player
 from entities.enemies import TrainingDummy, SmallRobot, GiantRobot, EliteMech
 from systems.platform_system import PlatformSystem
 from systems.font_manager import get_font
+from systems.save_system import save_system
 
 
 class GameLevel:
@@ -18,6 +19,11 @@ class GameLevel:
         self.enemies = []
         self.level_complete = False
         self.game_over = False
+
+        # 計時系統
+        self.start_time = pygame.time.get_ticks()
+        self.completion_time = None
+        self.level_completed_saved = False  # 確保只保存一次
 
         # 平台系統
         self.platform_system = PlatformSystem()
@@ -116,8 +122,11 @@ class GameLevel:
                 if self.level_number < LEVEL_3:
                     self.state_manager.start_level(self.level_number + 1)
                 else:
-                    # 遊戲完成，返回主選單
-                    self.state_manager.return_to_menu()
+                    # 遊戲完成，返回關卡選擇
+                    self.state_manager.change_state(LEVEL_SELECT_STATE)
+            elif event.key == pygame.K_TAB and self.level_complete:
+                # 返回關卡選擇
+                self.state_manager.change_state(LEVEL_SELECT_STATE)
 
     def update(self):
         """更新關卡邏輯"""
@@ -145,6 +154,8 @@ class GameLevel:
             if enemy.alive:
                 enemy.update(self.player)
             else:
+                # 敵人死亡時更新統計
+                save_system.add_enemy_defeat()
                 self.enemies.remove(enemy)
 
         # 檢查拳頭攻擊敵人
@@ -158,7 +169,16 @@ class GameLevel:
 
         # 檢查關卡完成條件
         if not self.enemies:  # 所有敵人都被擊敗
-            self.level_complete = True
+            if not self.level_complete:
+                self.level_complete = True
+                self.completion_time = (
+                    pygame.time.get_ticks() - self.start_time
+                ) / 1000.0  # 轉換為秒
+
+                # 保存關卡完成進度（只保存一次）
+                if not self.level_completed_saved:
+                    save_system.complete_level(self.level_number, self.completion_time)
+                    self.level_completed_saved = True
 
     def _check_fist_collisions(self):
         """檢查拳頭與敵人的碰撞"""
@@ -235,22 +255,24 @@ class GameLevel:
             if hasattr(enemy, "bullets"):  # 檢查敵人是否有子彈（主要是 BOSS）
                 for bullet in enemy.bullets[:]:
                     if bullet.get_rect().colliderect(self.player.get_rect()):
+                        # 對於雷射光束等持續性攻擊，確保只觸發一次傷害
+                        if hasattr(bullet, "damage_dealt") and bullet.damage_dealt:
+                            continue  # 已經造成過傷害，跳過
+
                         # 子彈擊中玩家
                         if self.player.is_defending:
-                            # 玩家防禦成功，子彈被格擋
-                            # 特殊處理：如果是雷射光束，防禦時仍會受到輕微傷害
-                            if (
-                                hasattr(bullet, "width") and bullet.width > 10
-                            ):  # 雷射光束
-                                if not self.player.invincible:
-                                    self.player.health = max(
-                                        0, self.player.health - 0.5
-                                    )  # 輕微傷害
+                            # 玩家防禦成功，所有子彈攻擊都被格擋
+                            # 防禦可以完全格擋所有類型的攻擊，包括雷射光束
+                            pass  # 防禦成功，不造成任何傷害
                         else:
                             # 玩家受到傷害
                             self.player.take_damage()
 
-                        # 移除子彈（除了雷射光束，它會持續存在一段時間）
+                        # 標記雷射光束等持續性攻擊已處理
+                        if hasattr(bullet, "damage_dealt"):
+                            bullet.damage_dealt = True
+
+                        # 移除子彈（除了雷射光束等持續性攻擊）
                         if not (hasattr(bullet, "width") and bullet.width > 10):
                             enemy.bullets.remove(bullet)
 
@@ -409,21 +431,39 @@ class GameLevel:
         # 關卡完成文字
         complete_text = self.font_large.render("關卡完成！", True, GREEN)
         complete_rect = complete_text.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 50)
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 80)
         )
         screen.blit(complete_text, complete_rect)
 
+        # 顯示完成時間
+        if self.completion_time:
+            time_text = self.font_medium.render(
+                f"完成時間：{self.completion_time:.2f} 秒", True, YELLOW
+            )
+            time_rect = time_text.get_rect(
+                center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 40)
+            )
+            screen.blit(time_text, time_rect)
+
         # 下一步提示
         if self.level_number < LEVEL_3:
-            next_text = self.font_medium.render(
-                "按 Enter 進入下一關，按 R 重新開始", True, WHITE
+            next_text = self.font_medium.render("按 Enter 進入下一關", True, WHITE)
+            next_rect = next_text.get_rect(
+                center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 10)
             )
+            screen.blit(next_text, next_rect)
         else:
-            next_text = self.font_medium.render(
-                "恭喜完成所有關卡！按 Enter 返回選單", True, YELLOW
+            next_text = self.font_medium.render("恭喜完成所有關卡！", True, YELLOW)
+            next_rect = next_text.get_rect(
+                center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 10)
             )
+            screen.blit(next_text, next_rect)
 
-        next_rect = next_text.get_rect(
-            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 20)
+        # 其他選項
+        options_text = self.font_small.render(
+            "Tab：返回關卡選擇    R：重新開始    ESC：主選單", True, GRAY
         )
-        screen.blit(next_text, next_rect)
+        options_rect = options_text.get_rect(
+            center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 50)
+        )
+        screen.blit(options_text, options_rect)

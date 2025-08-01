@@ -40,8 +40,8 @@ class MainMenu:
             exit()
 
     def _show_level_select(self):
-        """顯示關卡選擇（暫時直接開始第一關）"""
-        self.state_manager.start_level(LEVEL_1)
+        """顯示關卡選擇界面"""
+        self.state_manager.change_state(LEVEL_SELECT_STATE)
 
     def update(self):
         """更新選單邏輯"""

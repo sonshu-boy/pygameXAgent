@@ -949,11 +949,11 @@ class GiantRobot(Enemy):
         self.bullets.append(bullet)
 
     def _missile_barrage_attack(self, player):
-        """新攻擊：導彈齊射"""
+        """新攻擊：子彈齊射"""
         boss_center_x = self.x + self.width // 2
         boss_center_y = self.y + self.height // 2
 
-        # 發射5發導彈，形成扇形攻擊
+        # 發射5發子彈，形成扇形攻擊
         import math
 
         for i in range(5):
@@ -964,8 +964,8 @@ class GiantRobot(Enemy):
             target_x = player.x + player.width // 2 + math.sin(angle_rad) * 100
             target_y = player.y + player.height // 2 + math.cos(angle_rad) * 50
 
-            missile = MissileBullet(boss_center_x, boss_center_y, target_x, target_y)
-            self.bullets.append(missile)
+            bullet = Bullet(boss_center_x, boss_center_y, target_x, target_y)
+            self.bullets.append(bullet)
 
     def _laser_beam_attack(self, player):
         """新攻擊：雷射光束"""

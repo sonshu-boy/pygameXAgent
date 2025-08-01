@@ -6,6 +6,7 @@ from constants import *
 from states.menu import MainMenu
 from states.game_level import GameLevel
 from states.instructions import InstructionsScreen
+from states.level_select import LevelSelectScreen
 
 
 class GameStateManager:
@@ -14,6 +15,7 @@ class GameStateManager:
         self.states = {
             MENU_STATE: MainMenu(self),
             INSTRUCTIONS_STATE: InstructionsScreen(self),
+            LEVEL_SELECT_STATE: LevelSelectScreen(self),
         }
         self.current_level = None
 
