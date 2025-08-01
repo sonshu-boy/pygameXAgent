@@ -163,6 +163,100 @@ class LaserBeam(Bullet):
             )
 
 
+class TrackingBullet:
+    """法師機器人發射的追蹤子彈"""
+
+    def __init__(self, x, y, target_player):
+        self.x = x
+        self.y = y
+        self.target_player = target_player
+        self.size = TRACKING_BULLET_SIZE
+        self.speed = TRACKING_BULLET_SPEED
+        self.alive = True
+        self.spawn_time = pygame.time.get_ticks()
+        self.lifetime = TRACKING_BULLET_LIFETIME
+
+        # 初始速度方向（朝向玩家）
+        dx = target_player.x + target_player.width // 2 - x
+        dy = target_player.y + target_player.height // 2 - y
+        distance = math.sqrt(dx**2 + dy**2)
+
+        if distance > 0:
+            self.vel_x = (dx / distance) * self.speed
+            self.vel_y = (dy / distance) * self.speed
+        else:
+            self.vel_x = self.speed
+            self.vel_y = 0
+
+    def update(self):
+        """更新追蹤子彈"""
+        current_time = pygame.time.get_ticks()
+
+        # 檢查存在時間
+        if current_time - self.spawn_time > self.lifetime:
+            self.alive = False
+            return
+
+        # 檢查螢幕邊界
+        if self.x < 0 or self.x > WINDOW_WIDTH or self.y < 0 or self.y > WINDOW_HEIGHT:
+            self.alive = False
+            return
+
+        # 追蹤玩家
+        if self.target_player and self.target_player.health > 0:
+            target_x = self.target_player.x + self.target_player.width // 2
+            target_y = self.target_player.y + self.target_player.height // 2
+
+            # 計算朝向目標的方向
+            dx = target_x - self.x
+            dy = target_y - self.y
+            distance = math.sqrt(dx**2 + dy**2)
+
+            if distance > 0:
+                # 混合當前速度和追蹤方向
+                target_vel_x = (dx / distance) * self.speed
+                target_vel_y = (dy / distance) * self.speed
+
+                # 應用追蹤強度
+                self.vel_x += (
+                    target_vel_x - self.vel_x
+                ) * TRACKING_BULLET_TRACKING_STRENGTH
+                self.vel_y += (
+                    target_vel_y - self.vel_y
+                ) * TRACKING_BULLET_TRACKING_STRENGTH
+
+                # 確保速度不超過最大值
+                current_speed = math.sqrt(self.vel_x**2 + self.vel_y**2)
+                if current_speed > self.speed:
+                    self.vel_x = (self.vel_x / current_speed) * self.speed
+                    self.vel_y = (self.vel_y / current_speed) * self.speed
+
+        # 更新位置
+        self.x += self.vel_x
+        self.y += self.vel_y
+
+    def get_rect(self):
+        """獲取子彈碰撞矩形"""
+        return pygame.Rect(
+            self.x - self.size // 2, self.y - self.size // 2, self.size, self.size
+        )
+
+    def draw(self, screen):
+        """繪製追蹤子彈"""
+        # 繪製子彈本體（紫色）
+        pygame.draw.circle(
+            screen, (150, 0, 255), (int(self.x), int(self.y)), self.size // 2
+        )
+
+        # 繪製追蹤光環效果
+        pygame.draw.circle(
+            screen, (255, 100, 255), (int(self.x), int(self.y)), self.size // 2 + 2, 2
+        )
+
+        # 繪製中心亮點
+        pygame.draw.circle(screen, WHITE, (int(self.x), int(self.y)), self.size // 4)
+
+
 class Enemy:
     """敵人基類"""
 
@@ -635,6 +729,271 @@ class EliteMech(Enemy):
             screen, (200, 200, 200), (self.x + 10, self.y + 10, self.width - 20, 15)
         )
         pygame.draw.circle(screen, RED, (int(self.x + 30), int(self.y + 15)), 4)
+
+
+class MageRobot(Enemy):
+    """法師機器人 - 2.5關敵人"""
+
+    def __init__(self, x, y):
+        super().__init__(
+            x, y, MAGE_ROBOT_WIDTH, MAGE_ROBOT_HEIGHT, health=MAGE_ROBOT_HEALTH
+        )
+        self.color = (120, 50, 150)  # 紫色
+        self.speed = MAGE_ROBOT_SPEED
+        self.direction = 1
+        self.attack_cooldown = 0
+        self.bullets = []  # 追蹤子彈列表
+        self.retreat_distance = 150  # 保持與玩家的距離
+        self.attack_range = MAGE_ROBOT_ATTACK_RANGE
+
+        # 跳躍系統屬性
+        self.jump_speed = MAGE_ROBOT_JUMP_SPEED
+        self.double_jump_speed = MAGE_ROBOT_DOUBLE_JUMP_SPEED
+        self.jump_cooldown = 0
+        self.last_jump_time = 0
+
+        # 瞬移系統
+        self.teleport_cooldown = 0
+        self.last_teleport_time = 0
+        self.teleporting = False
+        self.teleport_charge_time = 0
+
+    def update(self, player):
+        """更新法師機器人"""
+        current_time = pygame.time.get_ticks()
+        super().update(player)
+
+        if not self.stunned and not self.knockback:
+            distance_to_player = abs(self.x - player.x)
+            height_difference = self.y - player.y
+
+            # 瞬移技能：危險時逃脫
+            if (
+                distance_to_player < 80  # 玩家太近
+                and current_time > self.teleport_cooldown
+                and self.platform_system is not None
+            ):
+                self._attempt_teleport(player)
+                self.teleport_cooldown = current_time + MAGE_ROBOT_TELEPORT_COOLDOWN
+
+            # 跳躍邏輯：主動追擊玩家到不同平台
+            elif (
+                current_time > self.jump_cooldown
+                and current_time - self.last_jump_time > MAGE_ROBOT_JUMP_COOLDOWN
+            ):
+                # 如果玩家在不同高度的平台上，嘗試跳躍追擊
+                if abs(height_difference) > 60 and distance_to_player < 300:
+                    if self._try_jump_to_player(player):
+                        self.jump_cooldown = current_time + 1000  # 短期冷卻避免連續跳躍
+                        self.last_jump_time = current_time
+
+            # 攻擊邏輯：在攻擊範圍內發射追蹤子彈
+            if (
+                distance_to_player <= self.attack_range
+                and current_time > self.attack_cooldown
+            ):
+                self._tracking_shot_attack(player)
+                self.attack_cooldown = current_time + MAGE_ROBOT_ATTACK_COOLDOWN
+
+            # 移動邏輯：保持距離，遠離玩家
+            if distance_to_player < self.retreat_distance:
+                # 遠離玩家
+                if player.x > self.x:
+                    # 玩家在右邊，向左移動
+                    new_x = self.x - self.speed
+                    if new_x > 0:  # 不超出左邊界
+                        self.x = new_x
+                        self.direction = -1
+                else:
+                    # 玩家在左邊，向右移動
+                    new_x = self.x + self.speed
+                    if new_x < WINDOW_WIDTH - self.width:  # 不超出右邊界
+                        self.x = new_x
+                        self.direction = 1
+            elif distance_to_player > self.attack_range + 50:
+                # 距離太遠，適當靠近
+                if player.x > self.x:
+                    self.x += self.speed * 0.5
+                    self.direction = 1
+                else:
+                    self.x -= self.speed * 0.5
+                    self.direction = -1
+
+        # 更新子彈
+        for bullet in self.bullets[:]:
+            bullet.update()
+            if not bullet.alive:
+                self.bullets.remove(bullet)
+
+    def _try_jump_to_player(self, player):
+        """嘗試跳躍到玩家位置"""
+        if not self.on_ground or self.stunned or self.knockback:
+            return False
+
+        # 檢查玩家位置是否需要跳躍
+        height_difference = self.y - player.y
+        horizontal_distance = abs(self.x - player.x)
+
+        # 如果玩家在上方且距離合理
+        if height_difference > 50 and horizontal_distance < 250:
+            return self.jump_towards_player(player)
+
+        # 如果玩家在下方，尋找合適的平台跳下去
+        elif height_difference < -30 and horizontal_distance < 200:
+            return self._jump_down_towards_player(player)
+
+        return False
+
+    def _jump_down_towards_player(self, player):
+        """向下跳躍接近玩家"""
+        if not self.on_ground:
+            return False
+
+        # 簡單的向前跳躍，依靠重力下落
+        if player.x > self.x:
+            self.vel_x = 3
+            self.direction = 1
+        else:
+            self.vel_x = -3
+            self.direction = -1
+
+        # 小幅度跳躍以脫離當前平台
+        self.vel_y = -8  # 較小的跳躍力度
+        self.on_ground = False
+        return True
+
+    def _attempt_teleport(self, player):
+        """嘗試瞬移到安全位置"""
+        if self.platform_system is None:
+            return False
+
+        # 尋找最遠的平台進行瞬移
+        best_platform = None
+        max_distance = 0
+
+        for platform in self.platform_system.platforms:
+            platform_center_x = platform.x + platform.width // 2
+            platform_center_y = platform.y
+
+            # 計算到玩家的距離
+            player_center_x = player.x + player.width // 2
+            distance_to_player = abs(platform_center_x - player_center_x)
+
+            # 選擇距離玩家最遠但在瞬移範圍內的平台
+            distance_to_self = abs(platform_center_x - (self.x + self.width // 2))
+            if (
+                distance_to_player > max_distance
+                and distance_to_self <= MAGE_ROBOT_TELEPORT_RANGE
+                and platform_center_x >= 0
+                and platform_center_x <= WINDOW_WIDTH - self.width
+            ):
+
+                max_distance = distance_to_player
+                best_platform = platform
+
+        # 執行瞬移
+        if best_platform:
+            self.x = best_platform.x + (best_platform.width - self.width) // 2
+            self.y = best_platform.y - self.height
+            self.vel_y = 0
+            self.on_ground = True
+            self.double_jump_available = True
+
+            # 瞬移特效
+            try:
+                from ..systems.particle_system import particle_system
+
+                teleport_x = self.x + self.width // 2
+                teleport_y = self.y + self.height // 2
+                particle_system.create_teleport_effect(teleport_x, teleport_y)
+            except ImportError:
+                pass  # 如果粒子系統不可用就跳過特效
+
+            self.teleporting = True
+            self.teleport_charge_time = pygame.time.get_ticks()
+
+            return True
+
+        return False
+
+    def _tracking_shot_attack(self, player):
+        """發射追蹤子彈攻擊"""
+        # 從法師機器人中心發射追蹤子彈
+        mage_center_x = self.x + self.width // 2
+        mage_center_y = self.y + self.height // 2
+
+        tracking_bullet = TrackingBullet(mage_center_x, mage_center_y, player)
+        self.bullets.append(tracking_bullet)
+
+    def draw(self, screen):
+        """繪製法師機器人"""
+        # 瞬移特效
+        if (
+            self.teleporting
+            and pygame.time.get_ticks() - self.teleport_charge_time < 300
+        ):
+            # 閃爍效果表示剛瞬移
+            if (pygame.time.get_ticks() // 50) % 2:
+                alpha_surface = pygame.Surface((self.width, self.height))
+                alpha_surface.set_alpha(128)
+                alpha_surface.fill((255, 255, 255))
+                screen.blit(alpha_surface, (self.x, self.y))
+        else:
+            self.teleporting = False
+
+        # 根據狀態決定顏色
+        if self.invincible and (pygame.time.get_ticks() // 100) % 2:
+            color = WHITE
+        elif self.stunned:
+            color = YELLOW
+        else:
+            color = self.color
+
+        # 繪製身體
+        pygame.draw.rect(screen, color, (self.x, self.y, self.width, self.height))
+
+        # 繪製法師帽子（三角形）
+        hat_points = [
+            (self.x + self.width // 2, self.y - 10),  # 帽子頂端
+            (self.x + 5, self.y + 5),  # 左下
+            (self.x + self.width - 5, self.y + 5),  # 右下
+        ]
+        pygame.draw.polygon(screen, (80, 30, 120), hat_points)
+
+        # 繪製法師眼睛（發光效果）
+        eye_color = (255, 100, 255) if not self.invincible else WHITE
+        pygame.draw.circle(screen, eye_color, (int(self.x + 12), int(self.y + 20)), 4)
+        pygame.draw.circle(
+            screen, eye_color, (int(self.x + self.width - 12), int(self.y + 20)), 4
+        )
+
+        # 繪製法師杖（如果有空間）
+        staff_x = self.x + (self.width // 2) + (10 if self.direction == 1 else -10)
+        staff_y = self.y + 15
+        pygame.draw.line(
+            screen, (139, 69, 19), (staff_x, staff_y), (staff_x, staff_y + 25), 3
+        )
+        pygame.draw.circle(screen, (255, 215, 0), (staff_x, staff_y), 5)
+
+        # 繪製瞬移充能效果
+        current_time = pygame.time.get_ticks()
+        if current_time < self.teleport_cooldown:
+            cooldown_remaining = (
+                self.teleport_cooldown - current_time
+            ) / MAGE_ROBOT_TELEPORT_COOLDOWN
+            if cooldown_remaining < 0.3:  # 冷卻即將結束時顯示充能效果
+                charge_color = (100, 200, 255)
+                pygame.draw.circle(
+                    screen,
+                    charge_color,
+                    (int(self.x + self.width // 2), int(self.y + self.height // 2)),
+                    int(15 * (1 - cooldown_remaining / 0.3)),
+                    2,
+                )
+
+        # 繪製子彈
+        for bullet in self.bullets:
+            bullet.draw(screen)
 
 
 class GiantRobot(Enemy):

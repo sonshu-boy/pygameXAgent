@@ -69,7 +69,7 @@ class SaveSystem:
             self.save_data["unlocked_levels"].sort()
             self._save_data()
 
-    def complete_level(self, level_number, completion_time=None):
+    def complete_level(self, level_number, completion_time=None, player_health=None):
         """標記關卡完成"""
         # 標記完成
         if level_number not in self.save_data["completed_levels"]:
@@ -85,12 +85,26 @@ class SaveSystem:
                     str(level_number)
                 ] = completion_time
 
-        # 解鎖下一關
-        next_level = level_number + 1
-        if next_level <= LEVEL_3:  # 假設只有3關
-            self.unlock_level(next_level)
+        # 特殊解鎖邏輯
+        if level_number == LEVEL_2:
+            # 第二關完成後的解鎖邏輯
+            if player_health == 3:  # 滿血完成第二關
+                self.unlock_level(LEVEL_2_5)  # 解鎖隱藏關卡
+            self.unlock_level(LEVEL_3)  # 總是解鎖第三關
+        elif level_number == LEVEL_2_5:
+            # 完成隱藏關卡後解鎖第三關（如果還沒解鎖）
+            self.unlock_level(LEVEL_3)
+        else:
+            # 其他關卡的標準解鎖邏輯
+            next_level = level_number + 1
+            if next_level <= LEVEL_3:
+                self.unlock_level(next_level)
 
         self._save_data()
+
+    def unlock_level_2_5(self):
+        """特殊方法：解鎖隱藏關卡 2.5"""
+        self.unlock_level(LEVEL_2_5)
 
     def get_unlocked_levels(self):
         """獲取已解鎖的關卡列表"""

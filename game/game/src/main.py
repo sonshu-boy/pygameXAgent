@@ -5,6 +5,11 @@
 
 import pygame
 import sys
+import os
+
+# 添加當前目錄到路徑
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from states.game_states import GameStateManager
 from constants import *
 
@@ -12,10 +17,23 @@ from constants import *
 class Game:
     def __init__(self):
         pygame.init()
+
+        # 初始化音效系統
+        try:
+            pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+            print("音效系統初始化成功")
+        except pygame.error as e:
+            print(f"音效系統初始化失敗: {e}")
+
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         pygame.display.set_caption("老鼠格鬥遊戲")
         self.clock = pygame.time.Clock()
         self.state_manager = GameStateManager()
+
+        # 初始化音效管理器
+        from systems.sound_manager import sound_manager
+
+        self.sound_manager = sound_manager
 
     def run(self):
         """主遊戲迴圈"""

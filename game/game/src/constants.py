@@ -33,7 +33,7 @@ FIST_MAX_DISTANCE = 80
 FIST_CHARGED_MAX_DISTANCE = 150  # 蓄力攻擊距離更遠
 FIST_SPEED = 10
 FIST_CHARGED_SPEED = 18  # 蓄力攻擊速度更快
-FIST_RETURN_SPEED = 8
+FIST_RETURN_SPEED = 15
 
 # 蓄力攻擊設定
 CHARGE_TIME = 1000  # 蓄力時間 1 秒（毫秒）
@@ -50,7 +50,7 @@ INVINCIBLE_DURATION = 500  # 毫秒
 # 滑行設定
 SLIDE_DISTANCE = 100
 SLIDE_SPEED = 8
-SLIDE_ATTACK_DAMAGE = 0
+SLIDE_ATTACK_DAMAGE = 0.5  # 滑行攻擊傷害
 SLIDE_ATTACK_KNOCKBACK = 80  # 滑行攻擊擊退力度
 
 # 敵人設定
@@ -105,6 +105,61 @@ COMBO_MULTIPLIER_TIER_2 = 1.5  # 5連擊以上傷害倍數
 # 攻擊設定
 AIR_ATTACK_DAMAGE_MULTIPLIER = 1.5  # 空中攻擊傷害倍數
 
+# 蓄力攻擊衝刺設定
+CHARGED_ATTACK_DASH_DISTANCE = 40  # 蓄力攻擊後的衝刺距離
+CHARGED_ATTACK_DASH_SPEED = 8  # 蓄力攻擊衝刺速度
+
+# 清屏技能設定
+CLEAR_SCREEN_COOLDOWN = 10000  # 清屏技能冷卻時間（10秒）
+CLEAR_SCREEN_KNOCKBACK = 120  # 清屏技能擊退力度
+CLEAR_SCREEN_RANGE = 300  # 清屏技能作用範圍（修正：從30000改為300）
+
+# 特效系統設定
+PARTICLE_MAX_COUNT = 200  # 最大粒子數量
+EFFECT_RING_DEFAULT_LIFETIME = 60  # 光環特效預設生命值
+TEXT_EFFECT_DEFAULT_LIFETIME = 90  # 文字特效預設生命值
+EXPLOSION_PARTICLE_COUNT = 15  # 爆炸粒子數量
+COMBO_EFFECT_THRESHOLD = 3  # 連擊特效觸發閾值
+CRITICAL_HIT_CHANCE = 0.1  # 暴擊機率
+PARTICLE_GRAVITY = 0.1  # 粒子重力
+HEALING_PARTICLE_COUNT = 8  # 治療粒子數量
+
+# 特效顏色設定
+EFFECT_COLOR_NORMAL = YELLOW  # 普通特效顏色
+EFFECT_COLOR_CRITICAL = RED  # 暴擊特效顏色
+EFFECT_COLOR_COMBO = (255, 165, 0)  # 連擊特效顏色（橙色）
+EFFECT_COLOR_HEALING = GREEN  # 治療特效顏色
+EFFECT_COLOR_DEFENSE = BLUE  # 防禦特效顏色
+EFFECT_COLOR_MAGIC = (150, 0, 255)  # 魔法特效顏色（紫色）
+
+# 血量道具設定
+HEALTH_ITEM_SPAWN_INTERVAL = 30000  # 血量道具生成間隔（30秒）
+HEALTH_ITEM_SIZE = 25  # 血量道具大小
+HEALTH_ITEM_RESTORE = 1  # 血量道具恢復的生命值
+
+# 法師機器人設定
+MAGE_ROBOT_WIDTH = 40
+MAGE_ROBOT_HEIGHT = 55
+MAGE_ROBOT_HEALTH = 4
+MAGE_ROBOT_SPEED = 1.5  # 移動速度較慢
+MAGE_ROBOT_ATTACK_RANGE = 400  # 攻擊範圍
+MAGE_ROBOT_BULLET_SPEED = 1  # 追蹤子彈速度
+MAGE_ROBOT_BULLET_SIZE = 40  # 追蹤子彈大小
+MAGE_ROBOT_ATTACK_COOLDOWN = 3000  # 攻擊冷卻時間
+
+# 法師跳躍系統設定
+MAGE_ROBOT_JUMP_SPEED = 14  # 法師跳躍速度
+MAGE_ROBOT_DOUBLE_JUMP_SPEED = 12  # 法師二段跳速度
+MAGE_ROBOT_JUMP_COOLDOWN = 4000  # 法師跳躍冷卻時間（4秒）
+MAGE_ROBOT_TELEPORT_COOLDOWN = 8000  # 法師瞬移冷卻時間（8秒）
+MAGE_ROBOT_TELEPORT_RANGE = 200  # 法師瞬移範圍
+
+# 追蹤子彈設定
+TRACKING_BULLET_SPEED = 6
+TRACKING_BULLET_SIZE = 12
+TRACKING_BULLET_TRACKING_STRENGTH = 0.07  # 追蹤強度
+TRACKING_BULLET_LIFETIME = 3000  # 子彈存在時間（3秒）
+
 # 平台設定
 PLATFORM_COLOR = (100, 100, 100)  # 平台顏色（灰色）
 PLATFORM_BORDER_COLOR = (200, 200, 200)  # 平台邊框顏色
@@ -123,6 +178,7 @@ INSTRUCTIONS_STATE = "instructions"
 # 關卡設定
 LEVEL_1 = 1  # 訓練場
 LEVEL_2 = 2  # 工廠
+LEVEL_2_5 = 2.5  # 廢棄工廠（隱藏關卡）
 LEVEL_3 = 3  # 實驗室（BOSS）
 
 # 字體設定
@@ -136,3 +192,10 @@ CHINESE_FONTS = [
     "C:/Windows/Fonts/mingliu.ttc",  # 細明體
     "C:/Windows/Fonts/simsun.ttc",  # 宋體
 ]
+
+# 音效設定
+SOUND_ENABLED = True  # 音效啟用狀態
+SOUND_VOLUME = 0.7  # 預設音量 (0.0 - 1.0)
+SOUND_HIT_NORMAL = "normal_hit"  # 普通攻擊擊中音效
+SOUND_HIT_CHARGED = "charged_hit"  # 蓄力攻擊擊中音效
+SOUND_CLEAR_SCREEN = "clear_screen"  # 清屏技能音效

@@ -2,18 +2,21 @@
   "unlocked_levels": [
     1,
     2,
+    2.5,
     3
   ],
   "completed_levels": [
     1,
-    2
+    2,
+    2.5
   ],
   "player_stats": {
     "total_playtime": 180000,
-    "total_enemies_defeated": 15,
+    "total_enemies_defeated": 25,
     "best_times": {
       "1": 12.4,
-      "2": 25.8
+      "2": 25.798,
+      "2.5": 13.917
     }
   }
 }

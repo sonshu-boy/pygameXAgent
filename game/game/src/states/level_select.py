@@ -30,6 +30,13 @@ class LevelSelectScreen:
                 "difficulty": "中級",
                 "color": (150, 100, 50),
             },
+            LEVEL_2_5: {
+                "name": "第2.5關：廢棄工廠",
+                "description": "隱藏關卡：對抗法師機器人",
+                "difficulty": "中級+",
+                "color": (120, 50, 150),
+                "hidden": True,  # 標記為隱藏關卡
+            },
             LEVEL_3: {
                 "name": "第三關：實驗室",
                 "description": "與巨型機器人BOSS決戰",
@@ -128,17 +135,27 @@ class LevelSelectScreen:
 
     def _draw_level_cards(self, screen):
         """繪製關卡卡片"""
+        # 只顯示已解鎖的關卡
+        available_levels = [
+            level
+            for level in sorted(self.level_info.keys())
+            if level in self.unlocked_levels
+        ]
+
+        if not available_levels:
+            return
+
         card_width = 200
         card_height = 120
         card_spacing = 250
-        start_x = WINDOW_WIDTH // 2 - (len(self.level_info) - 1) * card_spacing // 2
+        start_x = WINDOW_WIDTH // 2 - (len(available_levels) - 1) * card_spacing // 2
         card_y = 200
 
-        for i, level_num in enumerate(sorted(self.level_info.keys())):
+        for i, level_num in enumerate(available_levels):
             level_data = self.level_info[level_num]
-            is_unlocked = level_num in self.unlocked_levels
             is_completed = level_num in self.completed_levels
             is_selected = level_num == self.selected_level
+            is_hidden = level_data.get("hidden", False)
 
             # 計算卡片位置
             card_x = start_x + i * card_spacing - card_width // 2
@@ -156,32 +173,60 @@ class LevelSelectScreen:
 
             # 繪製卡片背景
             card_rect = pygame.Rect(card_x, card_y, card_width, card_height)
+            card_color = level_data["color"]
 
-            if is_unlocked:
-                # 已解鎖關卡
-                card_color = level_data["color"]
-                if is_selected:
-                    # 選中時變亮
-                    card_color = tuple(min(255, c + 50) for c in card_color)
-            else:
-                # 未解鎖關卡
-                card_color = (80, 80, 80)
+            if is_selected:
+                # 選中時變亮
+                card_color = tuple(min(255, c + 50) for c in card_color)
+
+            # 隱藏關卡特殊效果
+            if is_hidden:
+                # 添加閃爍效果
+                flash = int(50 * math.sin(self.animation_time / 10))
+                card_color = tuple(min(255, c + flash) for c in card_color)
 
             pygame.draw.rect(screen, card_color, card_rect, border_radius=10)
 
             # 繪製邊框
-            border_color = YELLOW if is_selected else WHITE
+            border_color = (
+                (255, 215, 0) if is_hidden else (YELLOW if is_selected else WHITE)
+            )
             border_width = 4 if is_selected else 2
             pygame.draw.rect(
                 screen, border_color, card_rect, border_width, border_radius=10
             )
 
             # 繪製關卡編號
-            level_text = self.font_large.render(str(level_num), True, WHITE)
+            level_display = f"{level_num}" if level_num != LEVEL_2_5 else "2.5"
+            level_text = self.font_large.render(level_display, True, WHITE)
             level_rect = level_text.get_rect(
                 center=(card_x + card_width // 2, card_y + 40)
             )
             screen.blit(level_text, level_rect)
+
+            # 隱藏關卡標識
+            if is_hidden:
+                star_color = (255, 215, 0)  # 金色星星
+                star_size = 15
+                star_x = card_x + card_width - 25
+                star_y = card_y + 10
+                # 簡單的星形效果
+                pygame.draw.polygon(
+                    screen,
+                    star_color,
+                    [
+                        (star_x, star_y),
+                        (star_x + 5, star_y + 10),
+                        (star_x + 15, star_y + 10),
+                        (star_x + 8, star_y + 16),
+                        (star_x + 12, star_y + 25),
+                        (star_x, star_y + 20),
+                        (star_x - 12, star_y + 25),
+                        (star_x - 8, star_y + 16),
+                        (star_x - 15, star_y + 10),
+                        (star_x - 5, star_y + 10),
+                    ],
+                )
 
             # 繪製完成狀態
             if is_completed:
@@ -189,7 +234,7 @@ class LevelSelectScreen:
                 check_color = GREEN
                 check_size = 20
                 check_x = card_x + card_width - 30
-                check_y = card_y + 10
+                check_y = card_y + 10 + (25 if is_hidden else 0)  # 隱藏關卡勾號位置下移
                 pygame.draw.lines(
                     screen,
                     check_color,
@@ -200,28 +245,6 @@ class LevelSelectScreen:
                         (check_x + check_size, check_y),
                     ],
                     4,
-                )
-
-            # 繪製鎖定狀態
-            if not is_unlocked:
-                # 繪製鎖定圖標
-                lock_color = RED
-                lock_size = 16
-                lock_x = card_x + card_width // 2 - lock_size // 2
-                lock_y = card_y + card_height - 35
-
-                # 鎖身
-                lock_body = pygame.Rect(lock_x, lock_y + 6, lock_size, lock_size - 6)
-                pygame.draw.rect(screen, lock_color, lock_body)
-
-                # 鎖環
-                pygame.draw.arc(
-                    screen,
-                    lock_color,
-                    (lock_x + 2, lock_y, lock_size - 4, lock_size // 2 + 4),
-                    0,
-                    math.pi,
-                    3,
                 )
 
             # 繪製最佳時間（已完成的關卡）
@@ -260,22 +283,29 @@ class LevelSelectScreen:
 
         # 難度
         difficulty_text = f"難度：{level_data['difficulty']}"
-        diff_color = {"初級": GREEN, "中級": YELLOW, "高級": RED}.get(
-            level_data["difficulty"], WHITE
-        )
+        diff_color = {
+            "初級": GREEN,
+            "中級": YELLOW,
+            "中級+": (255, 165, 0),  # 橙色
+            "高級": RED,
+        }.get(level_data["difficulty"], WHITE)
 
         diff_surface = self.font_small.render(difficulty_text, True, diff_color)
         diff_rect = diff_surface.get_rect(center=(WINDOW_WIDTH // 2, detail_y + 80))
         screen.blit(diff_surface, diff_rect)
 
         # 狀態提示
-        if not is_unlocked:
-            lock_text = "需要完成前一關卡才能解鎖"
-            lock_surface = self.font_small.render(lock_text, True, RED)
-            lock_rect = lock_surface.get_rect(
+        is_unlocked = self.selected_level in self.unlocked_levels
+        is_completed = self.selected_level in self.completed_levels
+        is_hidden = level_data.get("hidden", False)
+
+        if is_hidden:
+            hidden_text = "★ 隱藏關卡 ★"
+            hidden_surface = self.font_small.render(hidden_text, True, (255, 215, 0))
+            hidden_rect = hidden_surface.get_rect(
                 center=(WINDOW_WIDTH // 2, detail_y + 120)
             )
-            screen.blit(lock_surface, lock_rect)
+            screen.blit(hidden_surface, hidden_rect)
         elif is_completed:
             complete_text = "已完成"
             complete_surface = self.font_small.render(complete_text, True, GREEN)

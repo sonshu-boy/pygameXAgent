@@ -3,12 +3,16 @@
 """
 
 import pygame
+import math
+import random
 from constants import *
 from entities.player import Player
-from entities.enemies import TrainingDummy, SmallRobot, GiantRobot, EliteMech
+from entities.enemies import TrainingDummy, SmallRobot, GiantRobot, EliteMech, MageRobot
+from entities.items import HealthItemSpawner
 from systems.platform_system import PlatformSystem
 from systems.font_manager import get_font
 from systems.save_system import save_system
+from systems.particle_system import particle_system
 
 
 class GameLevel:
@@ -33,6 +37,9 @@ class GameLevel:
         self.font_large = get_font("large")
         self.font_medium = get_font("medium")
         self.font_small = get_font("small")
+
+        # 血量道具生成器
+        self.health_item_spawner = HealthItemSpawner()
 
         # 關卡設定
         self._setup_level()
@@ -76,6 +83,54 @@ class GameLevel:
             self.platform_system.add_platform(700, GROUND_Y - 140, 100, 20)
             self.platform_system.add_platform(350, GROUND_Y - 260, 80, 20)
 
+        elif self.level_number == LEVEL_2_5:
+            # 第2.5關：廢棄工廠（隱藏關卡）
+            self.level_name = "第2.5關：廢棄工廠"
+            self.background_color = (60, 40, 30)  # 深棕色
+
+            # 複雜的平台佈局，適合躲避和跳躍
+            # 低層平台
+            self.platform_system.add_platform(100, GROUND_Y - 80, 120, 20)
+            self.platform_system.add_platform(300, GROUND_Y - 60, 100, 20)
+            self.platform_system.add_platform(500, GROUND_Y - 90, 130, 20)
+            self.platform_system.add_platform(700, GROUND_Y - 70, 110, 20)
+
+            # 中層平台
+            self.platform_system.add_platform(150, GROUND_Y - 160, 140, 20)
+            self.platform_system.add_platform(400, GROUND_Y - 180, 120, 20)
+            self.platform_system.add_platform(650, GROUND_Y - 150, 100, 20)
+
+            # 高層平台
+            self.platform_system.add_platform(80, GROUND_Y - 240, 100, 20)
+            self.platform_system.add_platform(250, GROUND_Y - 280, 150, 20)
+            self.platform_system.add_platform(450, GROUND_Y - 260, 120, 20)
+            self.platform_system.add_platform(600, GROUND_Y - 220, 140, 20)
+
+            # 頂層平台（法師生成位置）
+            top_platform = self.platform_system.add_platform(
+                350, GROUND_Y - 350, 100, 20
+            )
+
+            # 添加法師機器人敵人 - 生成在最高平台上
+            for i in range(2):
+                if i == 0:
+                    # 第一個法師生成在頂層平台上
+                    mage_x = (
+                        top_platform.x + (top_platform.width - MAGE_ROBOT_WIDTH) // 2
+                    )
+                    mage_y = top_platform.y - MAGE_ROBOT_HEIGHT
+                else:
+                    # 第二個法師生成在第二高的平台上
+                    second_high_platform_y = GROUND_Y - 280
+                    mage_x = (
+                        250 + (150 - MAGE_ROBOT_WIDTH) // 2
+                    )  # 在250寬度150的平台中央
+                    mage_y = second_high_platform_y - MAGE_ROBOT_HEIGHT
+
+                mage = MageRobot(mage_x, mage_y)
+                mage.platform_system = self.platform_system
+                self.enemies.append(mage)
+
         elif self.level_number == LEVEL_3:
             # 第三關：實驗室（BOSS）
             self.level_name = "第三關：實驗室 - BOSS戰"
@@ -114,12 +169,34 @@ class GameLevel:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 self.state_manager.return_to_menu()
+            elif event.key == pygame.K_q:
+                # 處理Q鍵：反擊或清屏技能
+                if self.player.counter_attack_ready:
+                    if self.player.try_counter_attack(self.enemies):
+                        # 反擊成功，添加視覺效果
+                        player_center_x = self.player.x + self.player.width // 2
+                        player_center_y = self.player.y + self.player.height // 2
+                        particle_system.create_defense_effect(
+                            player_center_x, player_center_y
+                        )
+                elif self.player.clear_screen_available:
+                    # 執行清屏技能
+                    if self.player.activate_clear_screen_skill():
+                        self._execute_clear_screen_skill()
             elif event.key == pygame.K_r and (self.game_over or self.level_complete):
                 # 重新開始關卡
                 self.__init__(self.state_manager, self.level_number)
             elif event.key == pygame.K_RETURN and self.level_complete:
                 # 進入下一關
-                if self.level_number < LEVEL_3:
+                if self.level_number == LEVEL_2:
+                    # 檢查是否滿血進入2.5關
+                    if self.player.health == 3:
+                        self.state_manager.start_level(LEVEL_2_5)
+                    else:
+                        self.state_manager.start_level(LEVEL_3)
+                elif self.level_number == LEVEL_2_5:
+                    self.state_manager.start_level(LEVEL_3)
+                elif self.level_number < LEVEL_3:
                     self.state_manager.start_level(self.level_number + 1)
                 else:
                     # 遊戲完成，返回關卡選擇
@@ -131,18 +208,21 @@ class GameLevel:
     def update(self):
         """更新關卡邏輯"""
         if self.game_over or self.level_complete:
+            # 即使遊戲結束也要更新粒子系統
+            particle_system.update()
             return
+
+        # 更新粒子系統
+        particle_system.update()
 
         # 更新玩家
         self.player.update()
 
-        # 檢查反擊輸入
-        keys = pygame.key.get_pressed()
-        mouse_buttons = pygame.mouse.get_pressed()
-        if keys[pygame.K_q] or (len(mouse_buttons) > 2 and mouse_buttons[2]):
-            if self.player.try_counter_attack(self.enemies):
-                # 反擊成功，添加視覺效果
-                pass
+        # 更新血量道具系統
+        self.health_item_spawner.update(self.platform_system)
+
+        # 檢查道具拾取
+        self.health_item_spawner.check_collection(self.player)
 
         # 檢查玩家生命值
         if self.player.health <= 0:
@@ -161,11 +241,17 @@ class GameLevel:
         # 檢查拳頭攻擊敵人
         self._check_fist_collisions()
 
+        # 檢查拳頭打掉追蹤子彈
+        self._check_fist_bullet_collisions()
+
         # 檢查滑行攻擊
         self.player.check_slide_attack(self.enemies)
 
         # 檢查 BOSS 子彈攻擊玩家
         self._check_bullet_collisions()
+
+        # 檢查法師機器人子彈碰撞
+        self._check_mage_bullet_collisions()
 
         # 檢查關卡完成條件
         if not self.enemies:  # 所有敵人都被擊敗
@@ -175,9 +261,18 @@ class GameLevel:
                     pygame.time.get_ticks() - self.start_time
                 ) / 1000.0  # 轉換為秒
 
+                # 添加關卡完成特效
+                screen_center_x = WINDOW_WIDTH // 2
+                screen_center_y = WINDOW_HEIGHT // 2
+                particle_system.create_level_complete_effect(
+                    screen_center_x, screen_center_y
+                )
+
                 # 保存關卡完成進度（只保存一次）
                 if not self.level_completed_saved:
-                    save_system.complete_level(self.level_number, self.completion_time)
+                    save_system.complete_level(
+                        self.level_number, self.completion_time, self.player.health
+                    )
                     self.level_completed_saved = True
 
     def _check_fist_collisions(self):
@@ -214,6 +309,29 @@ class GameLevel:
                 enemy.take_damage(
                     final_damage, knockback, stun, source_x=self.player.left_fist.x
                 )
+
+                # 播放攻擊音效
+                try:
+                    from systems.sound_manager import sound_manager
+
+                    sound_manager.play_hit_sound(
+                        is_charged=self.player.left_fist.is_charged
+                    )
+                except ImportError:
+                    pass
+
+                # 添加擊中特效
+                hit_x = enemy.x + enemy.width // 2
+                hit_y = enemy.y + enemy.height // 2
+                is_charged = self.player.left_fist.is_charged
+                particle_system.create_hit_effect(hit_x, hit_y, is_charged)
+
+                # 添加傷害數字特效
+                is_critical = damage_multiplier > 1.0 or final_damage > base_damage
+                particle_system.create_damage_text(
+                    hit_x, hit_y - 20, final_damage, is_critical
+                )
+
                 self.player.left_fist.returning = True  # 拳頭立即返回
                 hit_enemy = True
 
@@ -243,11 +361,69 @@ class GameLevel:
                 enemy.take_damage(
                     final_damage, knockback, stun, source_x=self.player.right_fist.x
                 )
+
+                # 播放攻擊音效
+                try:
+                    from systems.sound_manager import sound_manager
+
+                    sound_manager.play_hit_sound(
+                        is_charged=self.player.right_fist.is_charged
+                    )
+                except ImportError:
+                    pass
+
+                # 添加擊中特效
+                hit_x = enemy.x + enemy.width // 2
+                hit_y = enemy.y + enemy.height // 2
+                is_charged = self.player.right_fist.is_charged
+                particle_system.create_hit_effect(hit_x, hit_y, is_charged)
+
+                # 添加傷害數字特效
+                is_critical = damage_multiplier > 1.0 or final_damage > base_damage
+                particle_system.create_damage_text(
+                    hit_x, hit_y - 20, final_damage, is_critical
+                )
+
                 self.player.right_fist.returning = True  # 拳頭立即返回
                 hit_enemy = True
 
         # 更新連擊系統
         self.player.update_combo_system(hit_enemy)
+
+        # 如果擊中敵人且連擊數達到閾值，添加連擊特效
+        if hit_enemy and self.player.combo_count >= COMBO_EFFECT_THRESHOLD:
+            player_center_x = self.player.x + self.player.width // 2
+            player_center_y = self.player.y + self.player.height // 2
+            particle_system.create_combo_effect(
+                player_center_x, player_center_y, self.player.combo_count
+            )
+
+    def _check_fist_bullet_collisions(self):
+        """檢查拳頭是否打掉追蹤子彈"""
+        for enemy in self.enemies:
+            if hasattr(enemy, "bullets") and isinstance(enemy, MageRobot):
+                for bullet in enemy.bullets[:]:
+                    # 檢查左拳碰撞
+                    if (
+                        self.player.left_fist.is_attacking
+                        and not self.player.left_fist.returning
+                        and self.player.left_fist.get_rect().colliderect(
+                            bullet.get_rect()
+                        )
+                    ):
+                        enemy.bullets.remove(bullet)
+                        # 拳頭打掉子彈不需要返回
+
+                    # 檢查右拳碰撞
+                    elif (
+                        self.player.right_fist.is_attacking
+                        and not self.player.right_fist.returning
+                        and self.player.right_fist.get_rect().colliderect(
+                            bullet.get_rect()
+                        )
+                    ):
+                        enemy.bullets.remove(bullet)
+                        # 拳頭打掉子彈不需要返回
 
     def _check_bullet_collisions(self):
         """檢查 BOSS 子彈與玩家的碰撞"""
@@ -280,6 +456,107 @@ class GameLevel:
                     if hasattr(bullet, "tracking") and bullet.tracking:
                         bullet.update(self.player)  # 傳入玩家以供追蹤
 
+    def _check_mage_bullet_collisions(self):
+        """檢查法師機器人追蹤子彈與玩家的碰撞"""
+        for enemy in self.enemies:
+            if hasattr(enemy, "bullets") and isinstance(enemy, MageRobot):
+                for bullet in enemy.bullets[:]:
+                    if bullet.get_rect().colliderect(self.player.get_rect()):
+                        # 子彈擊中玩家
+                        if self.player.is_defending:
+                            # 玩家防禦成功
+                            pass
+                        else:
+                            # 玩家受到傷害
+                            self.player.take_damage()
+
+                        # 移除子彈
+                        enemy.bullets.remove(bullet)
+
+    def _execute_clear_screen_skill(self):
+        """執行清屏技能效果"""
+        player_center_x = self.player.x + self.player.width // 2
+        player_center_y = self.player.y + self.player.height // 2
+
+        # 播放清屏技能音效
+        try:
+            from systems.sound_manager import sound_manager
+
+            sound_manager.play_clear_screen_sound()
+        except ImportError:
+            pass
+
+        # 添加清屏技能特效 - 從玩家位置擴散
+        particle_system.create_clear_screen_effect(player_center_x, player_center_y)
+
+        # 清除所有類型的子彈（包括法師機器人的追蹤子彈）
+        for enemy in self.enemies:
+            if hasattr(enemy, "bullets"):
+                # 為被清除的每個子彈創建消散特效
+                for bullet in enemy.bullets:
+                    try:
+                        bullet_x = getattr(bullet, "x", player_center_x)
+                        bullet_y = getattr(bullet, "y", player_center_y)
+                        # 創建子彈消散特效
+                        for _ in range(8):
+                            angle = random.uniform(0, 2 * math.pi)
+                            speed = random.uniform(3, 8)
+                            vel_x = math.cos(angle) * speed
+                            vel_y = math.sin(angle) * speed
+                            from ..systems.particle_system import Particle
+
+                            particle = Particle(
+                                bullet_x,
+                                bullet_y,
+                                vel_x,
+                                vel_y,
+                                (255, 255, 255),
+                                3,
+                                30,
+                                gravity=0,
+                            )
+                            particle_system.add_particle(particle)
+                    except:
+                        pass  # 如果獲取子彈位置失敗就跳過特效
+
+                enemy.bullets.clear()
+
+        # 擊退所有在範圍內的敵人
+        for enemy in self.enemies:
+            if enemy.alive:
+                # 計算真實距離（包含Y軸）
+                enemy_center_x = enemy.x + enemy.width // 2
+                enemy_center_y = enemy.y + enemy.height // 2
+                distance = math.sqrt(
+                    (enemy_center_x - player_center_x) ** 2
+                    + (enemy_center_y - player_center_y) ** 2
+                )
+
+                if distance <= CLEAR_SCREEN_RANGE:
+                    # 應用強力擊退
+                    enemy.knockback = True
+                    enemy.knockback_start_time = pygame.time.get_ticks()
+
+                    # 計算擊退方向（遠離玩家中心）
+                    if distance > 0:
+                        # 正規化方向向量
+                        direction_x = (enemy_center_x - player_center_x) / distance
+                        direction_y = (enemy_center_y - player_center_y) / distance
+
+                        # 水平擊退
+                        enemy.knockback_vel_x = direction_x * CLEAR_SCREEN_KNOCKBACK
+
+                        # 向上擊飛（保證向上分量）
+                        enemy.vel_y = -8 + max(0, direction_y * -5)
+                        enemy.on_ground = False
+                    else:
+                        # 如果距離為0，隨機擊退方向
+                        enemy.knockback_vel_x = random.choice(
+                            [-CLEAR_SCREEN_KNOCKBACK, CLEAR_SCREEN_KNOCKBACK]
+                        )
+                        enemy.vel_y = -8
+                        enemy.on_ground = False
+
     def draw(self, screen):
         """繪製關卡"""
         # 繪製背景
@@ -300,6 +577,12 @@ class GameLevel:
         for enemy in self.enemies:
             if enemy.alive:
                 enemy.draw(screen)
+
+        # 繪製血量道具
+        self.health_item_spawner.draw(screen)
+
+        # 繪製粒子特效系統
+        particle_system.draw(screen)
 
         # 繪製UI
         self._draw_ui(screen)
@@ -377,6 +660,20 @@ class GameLevel:
             )
             screen.blit(cooldown_text, (10, 180))
 
+        # 清屏技能冷卻指示
+        if not self.player.clear_screen_available:
+            clear_cooldown_remaining = (
+                CLEAR_SCREEN_COOLDOWN
+                - (pygame.time.get_ticks() - self.player.clear_screen_cooldown_start)
+            ) / 1000
+            clear_text = self.font_small.render(
+                f"清屏技能冷卻: {clear_cooldown_remaining:.1f}s", True, (255, 165, 0)
+            )
+            screen.blit(clear_text, (10, 200))
+        else:
+            clear_ready_text = self.font_small.render("Q鍵: 清屏技能就緒", True, GREEN)
+            screen.blit(clear_ready_text, (10, 200))
+
         # 敵人數量
         enemy_count = len([e for e in self.enemies if e.alive])
         enemy_text = self.font_small.render(f"剩餘敵人: {enemy_count}", True, WHITE)
@@ -387,7 +684,7 @@ class GameLevel:
             "WASD/方向鍵: 移動跳躍",
             "按住左鍵/右鍵: 蓄力攻擊",
             "空白鍵: 防禦",
-            "Q鍵/滑鼠中鍵: 反擊",
+            "Q鍵: 反擊/清屏技能",
             "Shift: 蹲下/滑行",
             "ESC: 返回選單",
         ]
@@ -446,7 +743,24 @@ class GameLevel:
             screen.blit(time_text, time_rect)
 
         # 下一步提示
-        if self.level_number < LEVEL_3:
+        if self.level_number == LEVEL_2:
+            if self.player.health == 3:
+                next_text = self.font_medium.render(
+                    "滿血狀態！按 Enter 進入隱藏關卡", True, YELLOW
+                )
+            else:
+                next_text = self.font_medium.render("按 Enter 進入第三關", True, WHITE)
+            next_rect = next_text.get_rect(
+                center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 10)
+            )
+            screen.blit(next_text, next_rect)
+        elif self.level_number == LEVEL_2_5:
+            next_text = self.font_medium.render("按 Enter 進入最終關卡", True, WHITE)
+            next_rect = next_text.get_rect(
+                center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 10)
+            )
+            screen.blit(next_text, next_rect)
+        elif self.level_number < LEVEL_3:
             next_text = self.font_medium.render("按 Enter 進入下一關", True, WHITE)
             next_rect = next_text.get_rect(
                 center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 10)

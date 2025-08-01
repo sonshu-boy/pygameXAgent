@@ -33,6 +33,16 @@ class Player:
         self.invincible = False
         self.invincible_start_time = 0
 
+        # 清屏技能系統
+        self.clear_screen_cooldown_start = 0
+        self.clear_screen_available = True
+
+        # 蓄力攻擊衝刺系統
+        self.dash_active = False
+        self.dash_start_time = 0
+        self.dash_direction = 0
+        self.dash_distance = 0
+
         # 新增：反擊系統
         self.counter_attack_ready = False
         self.counter_attack_window = 300  # 反擊窗口時間（毫秒）
@@ -108,13 +118,23 @@ class Player:
                 self.is_defending = True
                 self.defense_start_time = current_time
 
+                # 添加防禦特效
+                try:
+                    from ..systems.particle_system import particle_system
+
+                    defense_x = self.x + self.width // 2
+                    defense_y = self.y + self.height // 2
+                    particle_system.create_defense_effect(defense_x, defense_y)
+                except ImportError:
+                    pass  # 如果粒子系統不可用就跳過特效
+
         # 新增：反擊輸入（按 Q 鍵或滑鼠中鍵）
-        if self.keys[pygame.K_q] or (
-            len(self.mouse_buttons) > 2 and self.mouse_buttons[2]
-        ):  # 滑鼠中鍵
+        # 注意：Q鍵的清屏技能實際處理在 game_level.py 中，這裡只處理反擊
+        if self.keys[pygame.K_q]:
             if self.counter_attack_ready:
                 # 嘗試反擊需要傳入敵人列表，將在 game_level.py 中處理
                 pass
+            # 清屏技能的處理移到 game_level.py 中，避免重複觸發
 
         # 蹲下/滑行輸入
         if self.keys[pygame.K_LSHIFT] or self.keys[pygame.K_RSHIFT]:
@@ -176,6 +196,27 @@ class Player:
         if self.invincible:
             if current_time - self.invincible_start_time > INVINCIBLE_DURATION:
                 self.invincible = False
+
+        # 更新清屏技能冷卻
+        if not self.clear_screen_available:
+            if current_time - self.clear_screen_cooldown_start > CLEAR_SCREEN_COOLDOWN:
+                self.clear_screen_available = True
+
+        # 更新蓄力攻擊衝刺
+        if self.dash_active:
+            dash_duration = current_time - self.dash_start_time
+            if dash_duration < 300:  # 衝刺持續300毫秒
+                # 計算衝刺移動
+                remaining_distance = (
+                    self.dash_distance - (dash_duration / 300.0) * self.dash_distance
+                )
+                if remaining_distance > 0:
+                    move_amount = min(
+                        CHARGED_ATTACK_DASH_SPEED, remaining_distance / 10.0
+                    )
+                    self.x += self.dash_direction * move_amount
+            else:
+                self.dash_active = False
 
         # 應用重力
         if not self.on_ground:
@@ -281,6 +322,14 @@ class Player:
 
             self.counter_attack_ready = False
             self.perfect_defense_bonus = False
+            return True
+        return False
+
+    def activate_clear_screen_skill(self):
+        """激活清屏技能"""
+        if self.clear_screen_available:
+            self.clear_screen_available = False
+            self.clear_screen_cooldown_start = pygame.time.get_ticks()
             return True
         return False
 
@@ -431,6 +480,13 @@ class Fist:
                 self.attack_start_time = current_time
                 self.returning = False
                 self.charging = False
+
+                # 蓄力攻擊後觸發衝刺
+                if self.is_charged:
+                    self.player.dash_active = True
+                    self.player.dash_start_time = current_time
+                    self.player.dash_direction = 1 if dx > 0 else -1
+                    self.player.dash_distance = CHARGED_ATTACK_DASH_DISTANCE
 
     def start_attack(self, mouse_pos):
         """舊版本的立即攻擊（保持兼容性）"""
